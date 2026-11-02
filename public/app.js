@@ -166,5 +166,6 @@
   $('#v-calm button').addEventListener('click', () => voyEl.classList.toggle('calm'));
   document.addEventListener('visibilitychange', async () => { if (document.visibilityState === 'visible' && app.mode === 'focus' && !app.lock && navigator.wakeLock) { try { app.lock = await navigator.wakeLock.request('screen'); } catch (e) {} } });
 
+  if (/[?&]debug\b/.test(location.search)) window.__hm = { app, core, landed, goHome };   // review hook only
   startStreak(); setHomeRoute();
 })();

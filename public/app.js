@@ -36,10 +36,14 @@
   let sheetV = null;
   const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
   const streakSvg = (lines) => '<svg width="54" height="10" viewBox="0 0 54 10" aria-hidden="true" style="display:block;overflow:visible">' + lines.map((l) => '<line x1="' + l.x1 + '" y1="' + l.y + '" x2="' + l.x2 + '" y2="' + l.y + '" stroke="' + l.c + '" stroke-opacity="' + l.o + '" stroke-width="' + l.sw + '" stroke-linecap="round"></line>').join('') + '</svg>';
+  let selKey = '';
   const renderSel = () => {
-    const v = sheetV, box = $('#s-sel'); if (!v || !v.sel) { box.innerHTML = ''; return; }
+    const v = sheetV, box = $('#s-sel'); if (!v || !v.sel) { box.innerHTML = ''; selKey = ''; return; }
+    const tx = $('#s-seltx', box);
+    if (tx && selKey === v.sel.text) { tx.textContent = core.scr('sel', v.sel.text); return; }   // same route: only the scrambling name changes, the bar stays put
+    selKey = v.sel.text;
     box.innerHTML = '<div class="rt-toast" style="position:absolute;left:12px;right:12px;bottom:24px;height:76px;border-radius:38px;background:rgba(18,12,9,0.92);box-shadow:inset 0 0 0 1px rgba(255,217,176,0.28),0 18px 40px rgba(0,0,0,0.7);display:flex;align-items:center;padding:0 12px 0 24px;gap:12px;z-index:3">'
-      + '<div style="flex:1;min-width:0"><div style="font-family:\'Michroma\',sans-serif;font-size:10px;letter-spacing:0.16em;color:#fff3e2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(core.scr('sel', v.sel.text)) + '</div><div style="margin-top:6px;font-size:10px;color:rgba(255,234,210,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(v.sel.sub) + '</div></div>'
+      + '<div style="flex:1;min-width:0"><div id="s-seltx" style="font-family:\'Michroma\',sans-serif;font-size:10px;letter-spacing:0.16em;color:#fff3e2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(core.scr('sel', v.sel.text)) + '</div><div style="margin-top:6px;font-size:10px;color:rgba(255,234,210,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(v.sel.sub) + '</div></div>'
       + '<div id="s-go">' + LAUNCH_BTN + '</div></div>';
     $('#s-go button').addEventListener('click', () => core.launchGo());
   };

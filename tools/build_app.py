@@ -195,9 +195,16 @@ open(OUT + '/_headers', 'w').write('''/*
   Cache-Control: no-cache
 
 /*.js
-  Cache-Control: public, max-age=3600, must-revalidate
+  Cache-Control: public, max-age=31536000, immutable
 
 /*.png
   Cache-Control: public, max-age=604800
 ''')
+# cache-busting: every script URL carries a content hash, so a new deploy never runs against an older cached script
+import hashlib
+idx = open(OUT + '/index.html').read()
+for f in ('engine.js', 'routes.js', 'app.js'):
+    v = hashlib.sha1(open(OUT + '/' + f, 'rb').read()).hexdigest()[:10]
+    idx = re.sub(r'src="/' + re.escape(f) + r'(\?v=[0-9a-f]+)?"', 'src="/' + f + '?v=' + v + '"', idx)
+open(OUT + '/index.html', 'w').write(idx)
 print('built', sorted(os.listdir(OUT)))

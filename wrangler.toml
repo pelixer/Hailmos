@@ -1,4 +1,6 @@
-# Cloudflare Pages — static site, no build step (public/ is the finished app)
+# Cloudflare Workers — static site only (no server code). public/ is the finished app; `npx wrangler deploy` uploads it.
 name = "hailmos"
-pages_build_output_dir = "public"
 compatibility_date = "2026-10-01"
+
+[assets]
+directory = "./public"

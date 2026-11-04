@@ -19,15 +19,18 @@
 - 앱을 벗어나 있는 동안에는 항해가 멈춥니다. 우주선을 끌어 항로에서 떼어 내도 멈춥니다.
 - 주소 뒤에 `?demo`를 붙이면 항해 구간이 24초로 줄어 전체 흐름을 빠르게 볼 수 있습니다.
 
-## 배포 (Cloudflare Pages)
+## 배포 (Cloudflare Workers · 정적 사이트)
 
-빌드 명령 없이 `public` 폴더를 그대로 올립니다.
+`wrangler.toml`이 `public` 폴더를 그대로 정적 사이트로 올리도록 설정되어 있습니다. 빌드 단계는 없습니다.
+
+- 대시보드에서 Git 저장소를 연결할 때: Build command는 비워 두고, Deploy command는 `npx wrangler deploy` 그대로 둡니다.
+- 직접 올릴 때:
 
 ```bash
-npx wrangler pages deploy public --project-name hailmos
+npx wrangler deploy
 ```
 
-대시보드에서 Git 저장소를 연결해 배포할 때는 빌드 명령을 비워 두고, 출력 디렉터리를 `public`으로 지정합니다. 캐시와 보안 헤더는 `public/_headers`에 있습니다.
+캐시와 보안 헤더는 `public/_headers`에 있습니다.
 
 ## 로컬에서 보기
 

@@ -96,10 +96,12 @@
       this.meta = [m.o, m.d].map((x) => ({ name: x.name.toUpperCase(), data: x.data }));
       voyEl.classList.add('introing'); voyEl.classList.remove('calm'); voyEl.style.display = 'block';
       const tag = $('.jh-tag', voyEl); tag.style.opacity = 0; $('.jh-lp', tag).style.strokeDashoffset = 100; $('.jh-dm', tag).style.opacity = 0;
+      // the whole cruise turns at most ~20° (curve): a long gentle arc, never a loop
       const leg = DEMO ? 24 : m.t * 60, size = (v) => Object.assign({}, v, { orbitK: (v.orbitK || 2.32) * 1.125 });   // planet 20 % smaller against an orbit 10 % smaller on screen
       measure(); this.W = W; this.H = H;
       this.eng = HM.multiJourney($('canvas.jh-gl', voyEl), W, H, { glDpr: Math.min(3, window.devicePixelRatio || 2), routeStyle: 'bundle', shipScale: 0.021, vantFit: 1.325 / 0.9, reattachPx: 44,
-        cruise: Math.max(16, Math.min(700, 0.6 * leg)), curve: Math.min(0.02, 0.35 / Math.max(16, Math.min(700, 0.6 * leg))),   // the whole cruise turns at most ~20°: a long gentle arc, never a loop planetsData: { list: [size(m.o.v), size(m.d.v)] }, legDur: leg,
+        cruise: Math.max(16, Math.min(700, 0.6 * leg)), curve: Math.min(0.02, 0.35 / Math.max(16, Math.min(700, 0.6 * leg))),
+        planetsData: { list: [size(m.o.v), size(m.d.v)] }, legDur: leg,
         intro: { dur: 8.8 }, introSrc: () => streakCv, introGo: false, onIntroEnd: () => voyEl.classList.remove('introing'),
         onState: (v) => { this.st.on = v; this.sync(); this.render(); }, onPhase: (ph) => this.phase(ph), onFrame: (f) => this.frame(f) });
       this.fire = HM.fireTimer($('canvas.jh-tm', voyEl), 390, 92, { size: 50 }); this.sync(); this.render();
@@ -147,7 +149,7 @@
     if (app.mode !== 'sheet' && !(fromHome && app.mode === 'home')) return;
     app.last = m; app.flying = core._pending || [m.o.name, core._ix[m.d.name]]; save(); setHomeRoute();
     if (app.mode === 'sheet') { closeSheet(); app.mode = 'launching'; await wait(620); } else app.mode = 'launching';
-    try { app.voy = new Voyage(m); } catch (e) { console.error(e); app.mode = 'home'; voyEl.style.display = 'none'; return; }
+    try { app.voy = new Voyage(m); } catch (e) { console.error(e); if (app.voy) { try { app.voy.stop(); } catch (er) {} } app.voy = null; voyEl.style.display = 'none'; home.classList.remove('leaving'); app.mode = 'home'; return; }
     const t0 = performance.now(); while (app.voy.frames < 3 && performance.now() - t0 < 4000) await wait(30);   // the 3D view is up, holding the home image
     home.classList.add('leaving'); app.voy.go(); cl.on = true;
     streakCv.style.animation = 'none'; streakCv.style.opacity = '0'; home.style.background = 'transparent';

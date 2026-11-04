@@ -322,7 +322,7 @@ const HM = {
     const STAR = [[mkBuf(new Float32Array(SF)), SF.length / 8, 1], [mkBuf(new Float32Array(SM)), SM.length / 8, 0], [mkBuf(new Float32Array(SN)), SN.length / 8, 0]];
     // speed dust: a small field that rides with the ship and streams past it during the cruise, so the pace reads on any session length
     const SDN = o.speedDust || 320, SDB = gl.createBuffer(), SD0 = []; for (let i = 0; i < SDN; i++) { const c = starCol(); SD0.push([(srnd() * 2 - 1) * 1.6, (srnd() * 2 - 1) * 1.1, srnd() * 9, c, 0.8 + 1.4 * srnd(), srnd()]); }
-    const SDA = new Float32Array(SDN * 8);
+    const SDA = new Float32Array(SDN * 8); let sdPh = 0;   // dust phase advances with the ship's own speed: it stops when the ship is held still
     // ---------- yarn planets (same thread language as the planet boards), here as real 3D bodies on the route ends ----------
     const pY = PR('attribute vec3 aP;attribute vec3 aT;attribute float aW;attribute float aU;attribute float aF;attribute vec3 aC;uniform mat4 uPV;uniform mat4 uM;uniform vec3 uCen;uniform vec3 uEye;uniform float uRad;uniform float uPy;uniform float uMin;uniform vec2 uVp;uniform vec3 uL;varying float vW;varying float vI;varying float vU;varying float vF;varying vec3 vC;varying float vZ;varying float vRg;varying float vD;varying float vHp;varying float vLt;'
       + 'void main(){vec3 wp=(uM*vec4(aP,1.)).xyz;vec3 wt=normalize(mat3(uM)*aT);vec4 cp=uPV*vec4(wp,1.),cq=uPV*vec4(wp+wt*0.01,1.);vec2 sp=cp.xy/cp.w*uVp,sq=cq.xy/cq.w*uVp;vec2 dr=sq-sp;dr=length(dr)>1e-6?normalize(dr):vec2(1.,0.);vec2 n=vec2(-dr.y,dr.x);'
@@ -427,7 +427,7 @@ const HM = {
       const cruiseK = onLeg ? sm3(PH.g.s0 + 0.3, PH.g.s0 + 2.2, sBase) * sm3(0.4, 2.4, PH.g.s1 - sBase) : 0;
       if (mode !== 'free') fo = add(fo, scl(sub(foT, fo), 1 - Math.exp(-14 * dt))); else fo = add(fo, scl(sub(foT, fo), 1 - Math.exp(-18 * dt)));
       if (att && mode !== 'pull') pl = scl(pl, Math.exp(-6 * dt));
-      gapK += ((att ? 1 : 0) - gapK) * (1 - Math.exp(-(att ? 5 : 3) * dt));
+      gapK += ((att ? 1 : 0) - gapK) * (1 - Math.exp(-(att ? 5 : 3) * dt)); sdPh += dt * (o.dustSpeed || 3.2) * mv * (onLeg ? 1 : 0);
       const beat = (seq, t) => { const tot = seq.reduce((a, b) => a + b[0], 0); let x = ((t % tot) + tot) % tot; for (const b of seq) { if (x < b[0]) return b[1] * b[2](x / b[0]); x -= b[0]; } return 0; };
       const SURGE = [[2.6, 0.022, (p) => 0.5 - 0.5 * Math.cos(2 * Math.PI * p)], [3.2, 0.018, (p) => Math.pow(Math.sin(Math.PI * Math.pow(p, 0.55)), 2)], [2.4, 0.014, (p) => Math.pow(Math.sin(2 * Math.PI * p), 2)],
         [3.4, 0.026, (p) => Math.sin(Math.PI * p) * (1 - 0.3 * Math.sin(3 * Math.PI * p))], [2.8, 0.02, (p) => Math.pow(Math.sin(Math.PI * p), 2) * (0.8 + 0.2 * Math.sin(6 * Math.PI * p))]];
@@ -511,7 +511,7 @@ const HM = {
           for (const [buf, n, far] of STAR) { gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.enableVertexAttribArray(la); gl.vertexAttribPointer(la, 3, gl.FLOAT, false, 32, 0); gl.enableVertexAttribArray(lc); gl.vertexAttribPointer(lc, 3, gl.FLOAT, false, 32, 12); gl.enableVertexAttribArray(lz); gl.vertexAttribPointer(lz, 2, gl.FLOAT, false, 32, 24);
             gl.uniform1f(gl.getUniformLocation(pS, 'uFar'), far); gl.drawArrays(gl.POINTS, 0, n); }
           disableAll(); }
-        if (cruiseK > 0.01 && o.stars !== false) { const sp = (o.dustSpeed || 3.2), L = 9; for (let i = 0; i < SDN; i++) { const d = SD0[i], z = ((d[2] - T * sp) % L + L) % L - L * 0.35, fz = Math.min(1, (z + L * 0.35) / 1.5) * Math.min(1, (L * 0.65 - z) / 2.5), p = add(add(shF.p, scl(shF.r, d[0])), add(scl(shF.u, d[1]), scl(shF.f, z))), b = 0.55 * cruiseK * Math.max(0, fz);
+        if (cruiseK > 0.01 && o.stars !== false) { const L = 9; for (let i = 0; i < SDN; i++) { const d = SD0[i], z = ((d[2] - sdPh) % L + L) % L - L * 0.35, fz = Math.min(1, (z + L * 0.35) / 1.5) * Math.min(1, (L * 0.65 - z) / 2.5), p = add(add(shF.p, scl(shF.r, d[0])), add(scl(shF.u, d[1]), scl(shF.f, z))), b = 0.55 * cruiseK * Math.max(0, fz);
             SDA.set([p[0], p[1], p[2], d[3][0] * b, d[3][1] * b, d[3][2] * b, d[4], d[5]], i * 8); }
           gl.useProgram(pS); const la = gl.getAttribLocation(pS, 'aP'), lc = gl.getAttribLocation(pS, 'aC'), lz = gl.getAttribLocation(pS, 'aZ'); gl.bindBuffer(gl.ARRAY_BUFFER, SDB); gl.bufferData(gl.ARRAY_BUFFER, SDA, gl.STREAM_DRAW);
           gl.enableVertexAttribArray(la); gl.vertexAttribPointer(la, 3, gl.FLOAT, false, 32, 0); gl.enableVertexAttribArray(lc); gl.vertexAttribPointer(lc, 3, gl.FLOAT, false, 32, 12); gl.enableVertexAttribArray(lz); gl.vertexAttribPointer(lz, 2, gl.FLOAT, false, 32, 24);

@@ -403,6 +403,7 @@ const HM = {
     const kaw = (prog, src, dst) => { gl.bindFramebuffer(gl.FRAMEBUFFER, dst.f); gl.viewport(0, 0, dst.w, dst.h); gl.disable(gl.BLEND); gl.useProgram(prog); const a = gl.getAttribLocation(prog, 'aQ'); gl.bindBuffer(gl.ARRAY_BUFFER, quad); gl.enableVertexAttribArray(a); gl.vertexAttribPointer(a, 2, gl.FLOAT, false, 0, 0);
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.t); gl.uniform1i(gl.getUniformLocation(prog, 'uTex'), 0); gl.uniform2f(gl.getUniformLocation(prog, 'uH'), 0.5 / src.w, 0.5 / src.h); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); gl.disableVertexAttribArray(a); };
     const disableAll = () => { for (let i = 0; i < 8; i++) gl.disableVertexAttribArray(i); };
+    let lastPV = null, bloomSkipped = false;
     const INTRO = !!o.intro, TI = (o.intro && o.intro.dur) || 8.8; let landed = false; let iT = 0, iFt = 0, introDone = !INTRO;
     let raf = 0, t0 = 0, last = 0, stop = false, fc = 0, ang = 0, sNow = 0, jT = (o.t0 || 0) + (o.jt0 || 0), jF = o.t0 || 0, sOff = 0, onLeg = false, curG = null, PH = null;
     const sm3 = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -524,7 +525,7 @@ const HM = {
           gl.uniformMatrix4fv(gl.getUniformLocation(pS, 'uMVP'), false, new Float32Array(PV)); gl.uniform3f(gl.getUniformLocation(pS, 'uEye'), eye[0], eye[1], eye[2]); gl.uniform1f(gl.getUniformLocation(pS, 'uT'), T); gl.uniform1f(gl.getUniformLocation(pS, 'uFar'), 0);
           gl.uniform1f(gl.getUniformLocation(pS, 'uDpr'), bp ? gd / 2 : gd); gl.uniform1f(gl.getUniformLocation(pS, 'uB'), bp ? 1.6 : 1); gl.uniform1f(gl.getUniformLocation(pS, 'uA'), bp ? 0.3 : 1); gl.drawArrays(gl.POINTS, 0, SDN); disableAll(); }
         // planets (threads), departure and destination
-        for (const PP of PL) { const Y0 = PP.Y, C0 = PP.C, R0p = PP.R, ax = PP.ax, sp = 0.16;
+        for (const PP of PL) { if (PP._off) continue; const Y0 = PP.Y, C0 = PP.C, R0p = PP.R, ax = PP.ax, sp = 0.16;
           if (bp) { const cc = [0, 1, 2, 3].map((i) => PV[i] * C0[0] + PV[4 + i] * C0[1] + PV[8 + i] * C0[2] + PV[12 + i]); if (cc[3] < 0.05) continue; const rN = R0p * Pm[5] / cc[3], ls = [0, 1, 2, 3].map((i) => PV[i] * (C0[0] + PP.L[0]) + PV[4 + i] * (C0[1] + PP.L[1]) + PV[8 + i] * (C0[2] + PP.L[2]) + PV[12 + i]);
             const ld = [ls[0] / ls[3] - cc[0] / cc[3], ls[1] / ls[3] - cc[1] / cc[3]], ll = Math.hypot(ld[0], ld[1]) || 1;
             gl.useProgram(pDk); const qa = gl.getAttribLocation(pDk, 'aQ'); gl.bindBuffer(gl.ARRAY_BUFFER, quad); gl.enableVertexAttribArray(qa); gl.vertexAttribPointer(qa, 2, gl.FLOAT, false, 0, 0);
@@ -556,8 +557,13 @@ const HM = {
         disableAll();
       };
       gl.disable(gl.DEPTH_TEST); gl.disable(gl.CULL_FACE);
-      gl.bindFramebuffer(gl.FRAMEBUFFER, F1.f); gl.viewport(0, 0, BW, BH); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); scene(true);
-      kaw(pKd, F1, K1); kaw(pKd, K1, K2); kaw(pKd, K2, K3); kaw(pKu, K3, U2); kaw(pKu, U2, U1); kaw(pKu, U1, F3);
+      for (const PP of PL) { const c = [0, 1, 2, 3].map((i) => PV[i] * PP.C[0] + PV[4 + i] * PP.C[1] + PV[8 + i] * PP.C[2] + PV[12 + i]), re = PP.R * 3.2;
+        if (c[3] <= 0.05) PP._off = Math.hypot(PP.C[0] - eye[0], PP.C[1] - eye[1], PP.C[2] - eye[2]) > re;
+        else { const x = c[0] / c[3], y = c[1] / c[3], ry = re * Pm[5] / c[3], rx = re * Pm[0] / c[3], M = 1.25; PP._off = x - rx > M || x + rx < -M || y - ry > M || y + ry < -M; } }
+      let pvD = 1; if (lastPV) { pvD = 0; for (let i = 0; i < 16; i++) pvD = Math.max(pvD, Math.abs(PV[i] - lastPV[i])); }
+      if (IV || !lastPV || bloomSkipped || pvD > 0.0015) { bloomSkipped = false; lastPV = PV.slice();
+        gl.bindFramebuffer(gl.FRAMEBUFFER, F1.f); gl.viewport(0, 0, BW, BH); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT); scene(true);
+        kaw(pKd, F1, K1); kaw(pKd, K1, K2); kaw(pKd, K2, K3); kaw(pKu, K3, U2); kaw(pKu, U2, U1); kaw(pKu, U1, F3); } else bloomSkipped = true;
       gl.bindFramebuffer(gl.FRAMEBUFFER, null); gl.viewport(0, 0, gcv.width, gcv.height); gl.clearColor(0, 0, 0, 1); gl.clear(gl.COLOR_BUFFER_BIT);
       scene(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); quadDraw(F3.t, 0, 0, o.bloom || 2.4); gl.disable(gl.BLEND); disableAll();
       if (o.onFrame) { const pj = (q, rr) => { const w = PV[3] * q[0] + PV[7] * q[1] + PV[11] * q[2] + PV[15]; if (w < 0.05) return null; return [((PV[0] * q[0] + PV[4] * q[1] + PV[8] * q[2] + PV[12]) / w * 0.5 + 0.5) * W, (0.5 - (PV[1] * q[0] + PV[5] * q[1] + PV[9] * q[2] + PV[13]) / w * 0.5) * H, rr * Pm[5] * H / 2 / w]; };
@@ -594,7 +600,7 @@ const HM = {
       }
       return { strands, hairs, born: tnow, die: -1 };
     };
-    let tnow = 0, text = '', slots = [], raf = 0, stop = false, t0 = 0, calm = 0, calmT = 0;
+    let tnow = 0, text = '', slots = [], raf = 0, stop = false, t0 = 0, calm = 0, calmT = 0, lastDraw = 0;
     const layout = (s) => { const ws = s.split('').map((ch) => (ch === ':' ? CSLOT : SLOT) * FS), tot = ws.reduce((a, b) => a + b, 0); let x = (W - tot) / 2; return s.split('').map((ch, i) => { const gx = x + (ws[i] - (GL[ch] ? GL[ch].w : 0.9) * FS * (ch === ':' ? 1 : 0.92)) / 2; x += ws[i]; return { ch, x: gx }; }); };
     const set = (s) => {
       if (s === text) return; const L = layout(s), y0 = (H - FS * 0.78) / 2 - FS * 0.334;
@@ -629,8 +635,10 @@ const HM = {
       }
     };
     const frame = (ts) => {
-      if (stop) return; if (!t0) t0 = ts; tnow = (ts - t0) / 1000 + (o.t0 || 0);
-      calm += ((o.calm ? 1 : 0) - calm) * 0.05;
+      if (stop) return; if (!t0) { t0 = ts; lastDraw = ts - 1000; }
+      if (o.fps && ts - lastDraw < 1000 / o.fps - 2) { raf = requestAnimationFrame(frame); return; }
+      const dts = Math.min(0.1, (ts - lastDraw) / 1000); lastDraw = ts; tnow = (ts - t0) / 1000 + (o.t0 || 0);
+      calm += ((o.calm ? 1 : 0) - calm) * (1 - Math.exp(-3.08 * dts));   // = 0.05 per frame at 60 fps
       ctx.setTransform(1, 0, 0, 1, 0, 0); ctx.globalCompositeOperation = 'source-over'; ctx.clearRect(0, 0, cv.width, cv.height);
       ctx.globalCompositeOperation = 'lighter'; ctx.lineCap = 'round'; ctx.lineJoin = 'round';
       for (const sl of slots) { if (!sl) continue;

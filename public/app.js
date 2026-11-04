@@ -104,7 +104,7 @@
         planetsData: { list: [size(m.o.v), size(m.d.v)] }, legDur: leg,
         intro: { dur: 8.8 }, introSrc: () => streakCv, introGo: false, onIntroEnd: () => voyEl.classList.remove('introing'),
         onState: (v) => { this.st.on = v; this.sync(); this.render(); }, onPhase: (ph) => this.phase(ph), onFrame: (f) => this.frame(f) });
-      this.fire = HM.fireTimer($('canvas.jh-tm', voyEl), 390, 92, { size: 50 }); this.sync(); this.render();
+      this.fire = HM.fireTimer($('canvas.jh-tm', voyEl), 390, 92, { size: 50, fps: 30 });   // slow-writhing filaments: 30 redraws a second are enough this.sync(); this.render();
     }
     go() { this.eng.set('introGo', true); }
     total() { return this.m.t * 60; }

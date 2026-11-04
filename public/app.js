@@ -4,8 +4,10 @@
   const $ = (s, r = document) => r.querySelector(s);
   const wait = (ms) => new Promise((r) => setTimeout(r, ms));
   const stage = $('#stage');
-  const fit = () => { const s = Math.min(innerWidth / 390, innerHeight / 844); stage.style.transform = 'translate(-50%,-50%) scale(' + s + ')'; };
-  addEventListener('resize', fit); addEventListener('orientationchange', fit); fit();
+  // the app fills the real screen (no letterboxing); the 3D and streak canvases render at its true size
+  let W = Math.max(320, stage.clientWidth || innerWidth), H = Math.max(480, stage.clientHeight || innerHeight);
+  const measure = () => { const w = Math.max(320, stage.clientWidth || innerWidth), h = Math.max(480, stage.clientHeight || innerHeight); const ch = Math.abs(w - W) > 1 || Math.abs(h - H) > 1; W = w; H = h; return ch; };
+  addEventListener('resize', () => { if (measure() && app.mode === 'home') startStreak(); });
   const DEMO = /[?&]demo\b/.test(location.search);   // ?demo → the leg lasts 24 s instead of the chosen minutes (for review)
 
   // ---------- persistence (on this device only) ----------
@@ -19,7 +21,7 @@
   // ---------- home ----------
   const home = $('#home'), streakCv = $('canvas.lg-streak', home);
   let cl = null, stopStreak = null;
-  const startStreak = () => { if (stopStreak) stopStreak(); cl = { on: false, px: 169, py: 476, k: 1, rot: 0, sx: 1, z: 1, soft: 0, spd: 1 }; stopStreak = HM.streaks(streakCv, 390, 844, { dpr: 2, speeds: [14, 30, 55], hairAlpha: 0.42, collapse: cl }); };
+  const startStreak = () => { if (stopStreak) stopStreak(); measure(); cl = { on: false, px: 169 * W / 390, py: 476 * H / 844, k: 1, rot: 0, sx: 1, z: 1, soft: 0, spd: 1 }; stopStreak = HM.streaks(streakCv, W, H, { dpr: 2, speeds: [14, 30, 55], hairAlpha: 0.42, collapse: cl }); };
   const fx = (v) => (v < 10 ? v.toFixed(2) : v < 1000 ? v.toFixed(1) : Math.round(v).toLocaleString('en-US'));
   const clock = (t) => (t < 60 ? t + ':00' : Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0') + ':00');
   const setHomeRoute = () => { const m = app.last;
@@ -42,7 +44,7 @@
     const tx = $('#s-seltx', box);
     if (tx && selKey === v.sel.text) { tx.textContent = core.scr('sel', v.sel.text); return; }   // same route: only the scrambling name changes, the bar stays put
     selKey = v.sel.text;
-    box.innerHTML = '<div class="rt-toast" style="position:absolute;left:12px;right:12px;bottom:24px;height:76px;border-radius:38px;background:rgba(18,12,9,0.92);box-shadow:inset 0 0 0 1px rgba(255,217,176,0.28),0 18px 40px rgba(0,0,0,0.7);display:flex;align-items:center;padding:0 12px 0 24px;gap:12px;z-index:3">'
+    box.innerHTML = '<div class="rt-toast" style="position:absolute;left:12px;right:12px;bottom:calc(env(safe-area-inset-bottom) + 14px);height:76px;border-radius:38px;background:rgba(18,12,9,0.92);box-shadow:inset 0 0 0 1px rgba(255,217,176,0.28),0 18px 40px rgba(0,0,0,0.7);display:flex;align-items:center;padding:0 12px 0 24px;gap:12px;z-index:3">'
       + '<div style="flex:1;min-width:0"><div id="s-seltx" style="font-family:\'Michroma\',sans-serif;font-size:10px;letter-spacing:0.16em;color:#fff3e2;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(core.scr('sel', v.sel.text)) + '</div><div style="margin-top:6px;font-size:10px;color:rgba(255,234,210,0.55);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(v.sel.sub) + '</div></div>'
       + '<div id="s-go">' + LAUNCH_BTN + '</div></div>';
     $('#s-go button').addEventListener('click', () => core.launchGo());
@@ -94,7 +96,10 @@
       this.meta = [m.o, m.d].map((x) => ({ name: x.name.toUpperCase(), data: x.data }));
       voyEl.classList.add('introing'); voyEl.classList.remove('calm'); voyEl.style.display = 'block';
       const tag = $('.jh-tag', voyEl); tag.style.opacity = 0; $('.jh-lp', tag).style.strokeDashoffset = 100; $('.jh-dm', tag).style.opacity = 0;
-      this.eng = HM.multiJourney($('canvas.jh-gl', voyEl), 390, 844, { glDpr: Math.min(3, window.devicePixelRatio || 2), routeStyle: 'bundle', shipScale: 0.042, planetsData: { list: [m.o.v, m.d.v] }, legDur: DEMO ? 24 : m.t * 60,
+      const leg = DEMO ? 24 : m.t * 60, size = (v) => Object.assign({}, v, { orbitK: (v.orbitK || 2.32) * 1.125 });   // planet 20 % smaller against an orbit 10 % smaller on screen
+      measure(); this.W = W; this.H = H;
+      this.eng = HM.multiJourney($('canvas.jh-gl', voyEl), W, H, { glDpr: Math.min(3, window.devicePixelRatio || 2), routeStyle: 'bundle', shipScale: 0.021, vantFit: 1.325 / 0.9, reattachPx: 44,
+        cruise: Math.max(16, Math.min(700, 0.6 * leg)), planetsData: { list: [size(m.o.v), size(m.d.v)] }, legDur: leg,
         intro: { dur: 8.8 }, introSrc: () => streakCv, introGo: false, onIntroEnd: () => voyEl.classList.remove('introing'),
         onState: (v) => { this.st.on = v; this.sync(); this.render(); }, onPhase: (ph) => this.phase(ph), onFrame: (f) => this.frame(f) });
       this.fire = HM.fireTimer($('canvas.jh-tm', voyEl), 390, 92, { size: 50 }); this.sync(); this.render();
@@ -124,12 +129,12 @@
     frame(f) {
       this.frames++;
       const tag = $('.jh-tag', voyEl), P = f.planets[this.st.k];
-      if (P && this.st.kind === 'orbit') { const NEED = 182, cx = P[0], rr = (P[2] * ((this.st.k ? this.m.d.v : this.m.o.v).ring ? 1.25 : 1)) + 12; let sideL = this.side != null ? this.side : cx > 195, th = 0.75;
-        const room = (t, L) => (L ? cx - rr * Math.cos(t) - 8 : 382 - cx - rr * Math.cos(t)); if (this.side == null) { if (room(th, sideL) < NEED && room(th, !sideL) >= NEED) sideL = !sideL; this.side = sideL; } while (th < 1.57 && room(th, sideL) < NEED) th += 0.05;
+      if (P && this.st.kind === 'orbit') { const NEED = 182, cx = P[0], rr = (P[2] * ((this.st.k ? this.m.d.v : this.m.o.v).ring ? 1.25 : 1)) + 12, VW = this.W, VH = this.H; let sideL = this.side != null ? this.side : cx > VW / 2, th = 0.75;
+        const room = (t, L) => (L ? cx - rr * Math.cos(t) - 8 : VW - 8 - cx - rr * Math.cos(t)); if (this.side == null) { if (room(th, sideL) < NEED && room(th, !sideL) >= NEED) sideL = !sideL; this.side = sideL; } while (th < 1.57 && room(th, sideL) < NEED) th += 0.05;
         const ax = cx + (sideL ? -1 : 1) * rr * Math.cos(th), ay = P[1] + rr * Math.sin(th), svg = $('.jh-ld', tag), tx = $('.jh-tx', tag);
-        tag.style.transform = 'translate(' + Math.round(ax) + 'px,' + Math.round(Math.min(740, ay)) + 'px)'; svg.style.transform = sideL ? 'scaleX(-1)' : 'none';
+        tag.style.transform = 'translate(' + Math.round(ax) + 'px,' + Math.round(Math.min(VH - 104, ay)) + 'px)'; svg.style.transform = sideL ? 'scaleX(-1)' : 'none';
         const x0 = sideL ? ax - 178 : ax + 30, x1 = sideL ? ax - 30 : ax + 178; let my = -1e9; for (const q of (f.orb || [])) if (q[0] >= x0 && q[0] <= x1) my = Math.max(my, q[1]);
-        let Hd = Math.round(Math.max(44, my + 34 - ay)); Hd = Math.max(44, Math.min(Hd, 732 - Math.min(740, ay)));
+        let Hd = Math.round(Math.max(44, my + 34 - ay)); Hd = Math.max(44, Math.min(Hd, VH - 112 - Math.min(VH - 104, ay)));
         if (this.hd == null || Math.abs(Hd - this.hd) > 1) { this.hd = Hd; $('.jh-lp', tag).setAttribute('d', 'M 0 0 L 34 ' + Hd + ' L 168 ' + Hd); const dm = $('.jh-dm', tag); dm.setAttribute('y', Hd - 3.5); dm.setAttribute('transform', 'rotate(45 34 ' + Hd + ')'); tx.style.top = (Hd - 24) + 'px'; }
         tx.style.left = sideL ? 'auto' : '46px'; tx.style.right = sideL ? '46px' : 'auto'; tx.style.textAlign = sideL ? 'right' : 'left'; }
       if (f.kind === 'leg' && Math.abs(f.p - this.st.p) * this.total() >= 1) { this.st.p = f.p; this.sync(); this.render(); }

@@ -74,8 +74,10 @@ html = f'''<!doctype html>
 {HCSS}
 {SHEET_CSS}
 html,body{{margin:0;height:100%;background:#000;overflow:hidden;overscroll-behavior:none;touch-action:manipulation;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent}}
-#stage{{position:absolute;left:50%;top:50%;width:390px;height:844px;transform-origin:50% 50%;overflow:hidden;background:#000;color:#fff7ee;font-family:'Geist Mono','Noto Sans KR',monospace;-webkit-font-smoothing:antialiased}}
-.layer{{position:absolute;left:0;top:0;width:390px;height:844px}}
+#stage{{position:fixed;inset:0;width:100%;height:100%;overflow:hidden;background:#000;color:#fff7ee;font-family:'Geist Mono','Noto Sans KR',monospace;-webkit-font-smoothing:antialiased}}
+.layer{{position:absolute;inset:0}}
+.fill{{position:absolute;left:0;top:0;width:100%;height:100%}}
+#home .hui{{top:env(safe-area-inset-top)!important;bottom:env(safe-area-inset-bottom)!important}}
 #voy{{display:none}}
 #voy .vui{{transition:opacity 1.4s ease}}
 #voy.introing .vui{{opacity:0!important;pointer-events:none!important}}
@@ -89,7 +91,7 @@ html,body{{margin:0;height:100%;background:#000;overflow:hidden;overscroll-behav
 #log.open{{transform:translateY(0)}}
 #landed{{opacity:0;pointer-events:none;transition:opacity .8s ease;z-index:4}}
 #landed.on{{opacity:1;pointer-events:auto}}
-.handle{{position:absolute;left:159px;top:10px;width:72px;height:30px;border:0;background:transparent;cursor:pointer;padding:0;z-index:2}}
+.handle{{position:absolute;left:50%;transform:translateX(-50%);top:calc(env(safe-area-inset-top) + 6px);width:72px;height:30px;border:0;background:transparent;cursor:pointer;padding:0;z-index:2}}
 .handle span{{display:block;width:36px;height:4px;border-radius:2px;margin:0 auto;background:rgba(255,226,190,0.35)}}
 </style>
 </head>
@@ -97,7 +99,7 @@ html,body{{margin:0;height:100%;background:#000;overflow:hidden;overscroll-behav
 <div id="stage">
   <!-- focus voyage (3D): sits under home so the opening can take over the very same pixels -->
   <div id="voy" class="layer introing">
-    <canvas class="jh-gl" aria-label="항해 장면 — 우주선을 끌어 떼면 집중이 멈춥니다" style="position:absolute;left:0;top:0;width:390px;height:844px"></canvas>
+    <canvas class="jh-gl fill" aria-label="항해 장면 — 우주선을 끌어 떼면 집중이 멈춥니다"></canvas>
     <div class="jh-tag vui" aria-live="polite" style="position:absolute;left:0;top:0;width:0;height:0;opacity:0;pointer-events:none">
       <svg class="jh-ld" width="176" height="64" viewBox="0 0 176 64" aria-hidden="true" style="position:absolute;left:0;top:0;overflow:visible;transform-origin:0 0">
         <path class="jh-lp" d="M 0 0 L 34 44 L 168 44" fill="none" stroke="rgba(255,226,190,0.62)" stroke-width="1" pathLength="100" stroke-dasharray="100" style="stroke-dashoffset:100;transition:stroke-dashoffset 1.1s cubic-bezier(.16,1,.3,1)"></path>
@@ -108,26 +110,26 @@ html,body{{margin:0;height:100%;background:#000;overflow:hidden;overscroll-behav
         <div class="jh-td" style="margin-top:15px;font-size:9.5px;letter-spacing:0.12em;color:rgba(255,234,210,0.68)"></div>
       </div>
     </div>
-    <div class="vui vtext" style="position:absolute;left:0;right:0;top:66px;display:flex;flex-direction:column;align-items:center;pointer-events:none;transition:opacity 1s ease">
+    <div class="vui vtext" style="position:absolute;left:0;right:0;top:calc(env(safe-area-inset-top) + 48px);display:flex;flex-direction:column;align-items:center;pointer-events:none;transition:opacity 1s ease">
       <div class="jh-lb" style="font-family:'Michroma',sans-serif;color:#ece4ff;text-shadow:0 0 12px rgba(140,115,225,0.75);max-width:326px;margin:0 auto;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:10px;letter-spacing:.42em;text-indent:.42em"></div>
       <div class="jh-tw" role="timer" style="position:relative;width:390px;height:92px;margin-top:2px">
         <canvas class="jh-tm" aria-hidden="true" style="position:absolute;left:0;top:0;width:390px;height:92px;transition:opacity .8s"></canvas>
       </div>
       <div class="jh-km" style="margin-top:2px;font-size:11px;letter-spacing:0.08em;color:rgba(232,224,255,0.55)"></div>
     </div>
-    <div class="vui" style="position:absolute;left:22px;top:52px" id="v-home">{ic('home', '홈으로', 40)}</div>
-    <div class="vui" style="position:absolute;left:0;right:0;bottom:56px;display:flex;justify-content:center" id="v-calm">{ic('sound', '화면 비우기', 52)}</div>
+    <div class="vui" style="position:absolute;left:18px;top:calc(env(safe-area-inset-top) + 10px)" id="v-home">{ic('home', '홈으로', 40)}</div>
+    <div class="vui" style="position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 28px);display:flex;justify-content:center" id="v-calm">{ic('sound', '화면 비우기', 52)}</div>
   </div>
 
   <!-- home: the light streak -->
   <div id="home" class="layer">
-    <canvas class="lg-streak hb-cv" aria-hidden="true" style="position:absolute;left:0;top:0;width:390px;height:844px"></canvas>
+    <canvas class="lg-streak hb-cv fill" aria-hidden="true"></canvas>
     <div class="hui" style="position:absolute;inset:0">
 {HOMEUI}
     </div>
   </div>
 
-  <div id="landed" class="layer" aria-live="polite" style="background:linear-gradient(180deg,rgba(0,0,0,0) 62%,rgba(0,0,0,0.85) 82%);display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:48px;box-sizing:border-box">
+  <div id="landed" class="layer" aria-live="polite" style="background:linear-gradient(180deg,rgba(0,0,0,0) 62%,rgba(0,0,0,0.85) 82%);display:flex;flex-direction:column;align-items:center;justify-content:flex-end;padding-bottom:calc(env(safe-area-inset-bottom) + 40px);box-sizing:border-box">
     <div style="font-family:'Michroma',sans-serif;font-size:10px;letter-spacing:.42em;margin-right:-.42em;color:#ece4ff;text-shadow:0 0 12px rgba(140,115,225,.75)">LANDED</div>
     <div id="l-rt" style="margin-top:12px;max-width:330px;padding:0 30px;text-align:center;line-height:1.7;text-wrap:balance;font-family:'Michroma',sans-serif;font-size:13px;letter-spacing:.1em;color:#fff3e2"></div>
     <div id="l-home" style="margin-top:26px">{ic('home', '홈으로', 52, True)}</div>
@@ -136,22 +138,22 @@ html,body{{margin:0;height:100%;background:#000;overflow:hidden;overscroll-behav
   <!-- timer sheet -->
   <div id="sheet" class="layer" aria-label="집중 시간과 항로 선택">
     <button class="handle" id="s-close" aria-label="닫기"><span></span></button>
-    <div style="position:absolute;left:0;right:0;top:0;padding-top:58px">
+    <div style="position:absolute;left:0;right:0;top:0;padding-top:calc(env(safe-area-inset-top) + 44px)">
       <div style="padding:0 20px;display:flex;justify-content:space-between;align-items:baseline"><span style="font-family:'Michroma',sans-serif;font-size:10px;letter-spacing:.42em;color:#f3c48a">TIMER</span><span id="s-flown" style="font-size:10px;color:rgba(255,234,210,.5)"></span></div>
       <div style="margin-top:20px;text-align:center"><div id="s-time" style="font-family:'Michroma',sans-serif;font-size:40px;color:#fff3e2;text-shadow:0 0 24px rgba(234,138,72,.45)"></div><div id="s-total" style="margin-top:8px;font-size:10px;letter-spacing:.2em;color:rgba(255,234,210,.5)"></div></div>
       <div style="margin:22px 20px 0"><label for="rt-min" style="position:absolute;left:-9999px">집중 시간 (10분 단위)</label><input id="rt-min" class="rt-range" type="range" min="1" max="18" step="1" value="4"></div>
       <div aria-hidden="true" style="position:relative;margin:8px 20px 0;height:26px;font-size:9px;letter-spacing:.1em;color:rgba(255,234,210,.42)">{TICKS}{LABELS}</div>
       <div style="margin-top:14px"><label style="margin:0 20px;height:38px;border-radius:19px;border:1px solid rgba(255,226,190,0.18);display:flex;align-items:center;gap:10px;padding:0 14px">{SEARCH_IC}<span style="position:absolute;left:-9999px">행성 검색</span><input class="rt-q" id="rt-q" type="search" placeholder="SEARCH PLANET" autocomplete="off" autocapitalize="off" spellcheck="false"></label></div>
     </div>
-    <div class="rt-s" id="s-list" style="position:absolute;left:0;right:0;top:314px;bottom:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:120px"></div>
+    <div class="rt-s" id="s-list" style="position:absolute;left:0;right:0;top:calc(env(safe-area-inset-top) + 300px);bottom:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding-bottom:120px"></div>
     <div id="s-sel"></div>
   </div>
 
   <!-- flight log -->
   <div id="log" class="layer" aria-label="항해 기록">
     <button class="handle" id="g-close" aria-label="닫기"><span></span></button>
-    <div style="position:absolute;left:0;right:0;top:58px;padding:0 20px;display:flex;justify-content:space-between;align-items:baseline"><span style="font-family:'Michroma',sans-serif;font-size:10px;letter-spacing:.42em;color:#f3c48a">LOG</span><span id="g-count" style="font-size:10px;color:rgba(255,234,210,.5)"></span></div>
-    <div class="rt-s" id="g-list" style="position:absolute;left:0;right:0;top:100px;bottom:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 0 60px"></div>
+    <div style="position:absolute;left:0;right:0;top:calc(env(safe-area-inset-top) + 44px);padding:0 20px;display:flex;justify-content:space-between;align-items:baseline"><span style="font-family:'Michroma',sans-serif;font-size:10px;letter-spacing:.42em;color:#f3c48a">LOG</span><span id="g-count" style="font-size:10px;color:rgba(255,234,210,.5)"></span></div>
+    <div class="rt-s" id="g-list" style="position:absolute;left:0;right:0;top:calc(env(safe-area-inset-top) + 86px);bottom:0;overflow-y:auto;-webkit-overflow-scrolling:touch;padding:0 0 60px"></div>
   </div>
 </div>
 <script>const LAUNCH_BTN = {json.dumps(ic('launch', '출항', 52, True))};</script>

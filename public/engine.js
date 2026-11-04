@@ -213,7 +213,7 @@ const HM = {
       const cru = (t) => [Q[0] + (Math.cos(ps0) - Math.cos(ps0 + kap * t)) / kap, Q[1] + CLB * t, Q[2] + (Math.sin(ps0 + kap * t) - Math.sin(ps0)) / kap];
       const i0 = RAW.length - 1;
       for (let i = 1; i <= 700; i++) RAW.push(bez(Dp, va(Dp, tDep, H1 * 0.8 * sc), va(Q, Hh, -H1 * 0.8 * sc), Q, i / 700));
-      for (let i = 1; i <= Math.ceil(LC / 0.01); i++) RAW.push(cru(Math.min(LC, i * 0.01)));
+      { const cs = Math.max(0.01, LC / 24000); for (let i = 1; i <= Math.ceil(LC / cs); i++) RAW.push(cru(Math.min(LC, i * cs))); }
       const R0 = cru(LC), De = [Math.sin(ps0 + kap * LC), 0, Math.cos(ps0 + kap * LC)], h2 = Math.max(H2, N.RO * 1.15);
       N.tt = vn(va(De, N.ax, -vd(De, N.ax))); N.rr = vn(vx(N.tt, N.ax)); N.fh = vn(De);
       const PJ = [R0[0] + De[0] * h2 * 1.5, R0[1] - h2 * 0.22, R0[2] + De[2] * h2 * 1.5]; N.C = va(PJ, N.rr, -N.RO);
@@ -253,7 +253,7 @@ const HM = {
     // aurora ramp (spec #1f4636 → #4f7d5a → #6e8e60 → #8fb07f → #bfd2ae → #a8f0c6) as emissive tones, plus a teal and a lime edge
     const AUR = [[0.10, 0.36, 0.25], [0.24, 0.64, 0.40], [0.40, 0.68, 0.34], [0.52, 0.82, 0.44], [0.70, 0.88, 0.62], [0.52, 1.00, 0.74], [0.18, 0.86, 0.64], [0.30, 0.95, 0.46]];
     const VPAL = [[0.36, 0.24, 0.88], [0.61, 0.35, 0.94]];
-    const RV = [], RI = [], RN = BUN ? Math.ceil(SMAX / 0.012) : 3000, NF = BUN ? (o.routeFibers || 15) : 1;
+    const RV = [], RI = [], RN = BUN ? Math.min(Math.ceil(SMAX / 0.012), 22000) : 3000, NF = BUN ? (o.routeFibers || 15) : 1;
     const RRAD = BUN ? (o.routeFiberR || 0.00035) : (o.routeR || (GRY ? 0.0013 : 0.0011)), RB = o.routeBundleR || 0.0041, TW = o.routeTwist || 5.5;
     const FK = BUN ? (o.routeFK || 1.8) : 1;
     const sm3c = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
@@ -315,11 +315,14 @@ const HM = {
     const mag = () => { const r = Math.pow(srnd(), 3.2); return { b: 0.45 + 0.9 * r, s: 1.35 + 2.1 * r }; };   // most stars faint, a few brighter
     const SF = [], SM = [], SN = [];
     for (let i = 0; i < (o.farStars || 4200); i++) { const z = srnd() * 2 - 1, a = srnd() * 6.283, rr = Math.sqrt(1 - z * z), R = 150, c = starCol(), m = mag(); SF.push(rr * Math.cos(a) * R, z * R, rr * Math.sin(a) * R, c[0] * m.b, c[1] * m.b, c[2] * m.b, m.s, srnd()); }
-    for (let i = 0; i < (o.midStars || 640); i++) { const sp = -6 + srnd() * (SMAX + 12), q = route(sp), a = srnd() * 6.283, rr = 4 + 30 * Math.sqrt(srnd()), c = starCol(), m = mag();
+    for (let i = 0; i < (o.midStars || Math.min(9000, Math.round(640 * Math.max(1, SMAX / 40)))); i++) { const sp = -6 + srnd() * (SMAX + 12), q = route(sp), a = srnd() * 6.283, rr = 4 + 30 * Math.sqrt(srnd()), c = starCol(), m = mag();
       SM.push(q[0] + Math.cos(a) * rr, q[1] + Math.sin(a) * rr * 0.8, q[2] + (srnd() - 0.5) * 8, c[0] * m.b * 0.9, c[1] * m.b * 0.9, c[2] * m.b * 0.9, m.s * 0.9, srnd()); }
-    for (let i = 0; i < (o.dust || 60); i++) { const sp = -4 + srnd() * (SMAX + 8), q = route(sp), a = srnd() * 6.283, rr = 0.7 + 2.2 * srnd(), c = starCol(), b = 0.05 + 0.08 * srnd();
+    for (let i = 0; i < (o.dust || Math.min(3000, Math.round(60 * Math.max(1, SMAX / 40)))); i++) { const sp = -4 + srnd() * (SMAX + 8), q = route(sp), a = srnd() * 6.283, rr = 0.7 + 2.2 * srnd(), c = starCol(), b = 0.05 + 0.08 * srnd();
       SN.push(q[0] + Math.cos(a) * rr, q[1] + Math.sin(a) * rr, q[2] + (srnd() - 0.5) * 0.8, c[0] * b, c[1] * b, c[2] * b, 1 + srnd(), srnd()); }
     const STAR = [[mkBuf(new Float32Array(SF)), SF.length / 8, 1], [mkBuf(new Float32Array(SM)), SM.length / 8, 0], [mkBuf(new Float32Array(SN)), SN.length / 8, 0]];
+    // speed dust: a small field that rides with the ship and streams past it during the cruise, so the pace reads on any session length
+    const SDN = o.speedDust || 320, SDB = gl.createBuffer(), SD0 = []; for (let i = 0; i < SDN; i++) { const c = starCol(); SD0.push([(srnd() * 2 - 1) * 1.6, (srnd() * 2 - 1) * 1.1, srnd() * 9, c, 0.8 + 1.4 * srnd(), srnd()]); }
+    const SDA = new Float32Array(SDN * 8);
     // ---------- yarn planets (same thread language as the planet boards), here as real 3D bodies on the route ends ----------
     const pY = PR('attribute vec3 aP;attribute vec3 aT;attribute float aW;attribute float aU;attribute float aF;attribute vec3 aC;uniform mat4 uPV;uniform mat4 uM;uniform vec3 uCen;uniform vec3 uEye;uniform float uRad;uniform float uPy;uniform float uMin;uniform vec2 uVp;uniform vec3 uL;varying float vW;varying float vI;varying float vU;varying float vF;varying vec3 vC;varying float vZ;varying float vRg;varying float vD;varying float vHp;varying float vLt;'
       + 'void main(){vec3 wp=(uM*vec4(aP,1.)).xyz;vec3 wt=normalize(mat3(uM)*aT);vec4 cp=uPV*vec4(wp,1.),cq=uPV*vec4(wp+wt*0.01,1.);vec2 sp=cp.xy/cp.w*uVp,sq=cq.xy/cq.w*uVp;vec2 dr=sq-sp;dr=length(dr)>1e-6?normalize(dr):vec2(1.,0.);vec2 n=vec2(-dr.y,dr.x);'
@@ -422,6 +425,9 @@ const HM = {
       if (PH.g !== curG) { curG = PH.g; sOff = 0; if (o.onPhase) o.onPhase({ kind: PH.g.kind, k: PH.g.k, final: !!PH.g.final }); }
       const fadeK = Math.min(1, jF / 1.2), sBase = Math.min(SMAX, PH.s + (onLeg ? sOff * (1 - sm3(0.82, 0.97, PH.p)) : 0));
       const cruiseK = onLeg ? sm3(PH.g.s0 + 0.3, PH.g.s0 + 2.2, sBase) * sm3(0.4, 2.4, PH.g.s1 - sBase) : 0;
+      if (mode !== 'free') fo = add(fo, scl(sub(foT, fo), 1 - Math.exp(-14 * dt))); else fo = add(fo, scl(sub(foT, fo), 1 - Math.exp(-18 * dt)));
+      if (att && mode !== 'pull') pl = scl(pl, Math.exp(-6 * dt));
+      gapK += ((att ? 1 : 0) - gapK) * (1 - Math.exp(-(att ? 5 : 3) * dt));
       const beat = (seq, t) => { const tot = seq.reduce((a, b) => a + b[0], 0); let x = ((t % tot) + tot) % tot; for (const b of seq) { if (x < b[0]) return b[1] * b[2](x / b[0]); x -= b[0]; } return 0; };
       const SURGE = [[2.6, 0.022, (p) => 0.5 - 0.5 * Math.cos(2 * Math.PI * p)], [3.2, 0.018, (p) => Math.pow(Math.sin(Math.PI * Math.pow(p, 0.55)), 2)], [2.4, 0.014, (p) => Math.pow(Math.sin(2 * Math.PI * p), 2)],
         [3.4, 0.026, (p) => Math.sin(Math.PI * p) * (1 - 0.3 * Math.sin(3 * Math.PI * p))], [2.8, 0.02, (p) => Math.pow(Math.sin(Math.PI * p), 2) * (0.8 + 0.2 * Math.sin(6 * Math.PI * p))]];
@@ -505,6 +511,12 @@ const HM = {
           for (const [buf, n, far] of STAR) { gl.bindBuffer(gl.ARRAY_BUFFER, buf); gl.enableVertexAttribArray(la); gl.vertexAttribPointer(la, 3, gl.FLOAT, false, 32, 0); gl.enableVertexAttribArray(lc); gl.vertexAttribPointer(lc, 3, gl.FLOAT, false, 32, 12); gl.enableVertexAttribArray(lz); gl.vertexAttribPointer(lz, 2, gl.FLOAT, false, 32, 24);
             gl.uniform1f(gl.getUniformLocation(pS, 'uFar'), far); gl.drawArrays(gl.POINTS, 0, n); }
           disableAll(); }
+        if (cruiseK > 0.01 && o.stars !== false) { const sp = (o.dustSpeed || 3.2), L = 9; for (let i = 0; i < SDN; i++) { const d = SD0[i], z = ((d[2] - T * sp) % L + L) % L - L * 0.35, fz = Math.min(1, (z + L * 0.35) / 1.5) * Math.min(1, (L * 0.65 - z) / 2.5), p = add(add(shF.p, scl(shF.r, d[0])), add(scl(shF.u, d[1]), scl(shF.f, z))), b = 0.55 * cruiseK * Math.max(0, fz);
+            SDA.set([p[0], p[1], p[2], d[3][0] * b, d[3][1] * b, d[3][2] * b, d[4], d[5]], i * 8); }
+          gl.useProgram(pS); const la = gl.getAttribLocation(pS, 'aP'), lc = gl.getAttribLocation(pS, 'aC'), lz = gl.getAttribLocation(pS, 'aZ'); gl.bindBuffer(gl.ARRAY_BUFFER, SDB); gl.bufferData(gl.ARRAY_BUFFER, SDA, gl.STREAM_DRAW);
+          gl.enableVertexAttribArray(la); gl.vertexAttribPointer(la, 3, gl.FLOAT, false, 32, 0); gl.enableVertexAttribArray(lc); gl.vertexAttribPointer(lc, 3, gl.FLOAT, false, 32, 12); gl.enableVertexAttribArray(lz); gl.vertexAttribPointer(lz, 2, gl.FLOAT, false, 32, 24);
+          gl.uniformMatrix4fv(gl.getUniformLocation(pS, 'uMVP'), false, new Float32Array(PV)); gl.uniform3f(gl.getUniformLocation(pS, 'uEye'), eye[0], eye[1], eye[2]); gl.uniform1f(gl.getUniformLocation(pS, 'uT'), T); gl.uniform1f(gl.getUniformLocation(pS, 'uFar'), 0);
+          gl.uniform1f(gl.getUniformLocation(pS, 'uDpr'), bp ? gd / 2 : gd); gl.uniform1f(gl.getUniformLocation(pS, 'uB'), bp ? 1.6 : 1); gl.uniform1f(gl.getUniformLocation(pS, 'uA'), bp ? 0.3 : 1); gl.drawArrays(gl.POINTS, 0, SDN); disableAll(); }
         // planets (threads), departure and destination
         for (const PP of PL) { const Y0 = PP.Y, C0 = PP.C, R0p = PP.R, ax = PP.ax, sp = 0.16;
           if (bp) { const cc = [0, 1, 2, 3].map((i) => PV[i] * C0[0] + PV[4 + i] * C0[1] + PV[8 + i] * C0[2] + PV[12 + i]); if (cc[3] < 0.05) continue; const rN = R0p * Pm[5] / cc[3], ls = [0, 1, 2, 3].map((i) => PV[i] * (C0[0] + PP.L[0]) + PV[4 + i] * (C0[1] + PP.L[1]) + PV[8 + i] * (C0[2] + PP.L[2]) + PV[12 + i]);

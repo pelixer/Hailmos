@@ -387,7 +387,7 @@ const HM = {
     const pluck = (v, sp) => { snapV = v; snapS = sp; snapT = 0; };
     const toWorld = (e) => { const rc = gcv.getBoundingClientRect(), sx = W / (rc.width || W), dx = (e.clientX - gx) * sx, dy = (e.clientY - gy0) * sx; if (!camB) return [0, 0, 0]; const k = camB.wpp; return add(scl(camB.r, dx * k), scl(camB.u, -dy * k)); };
     const hitShip = (e) => { if (!onLeg) return false; const rc = gcv.getBoundingClientRect(), sx = W / (rc.width || W); return Math.hypot((e.clientX - rc.left) * sx - shipScr[0], (e.clientY - rc.top) * sx - shipScr[1]) < (o.grabR || 46); };
-    const down = (e) => { try { tgt.setPointerCapture(e.pointerId); } catch (err) {} if (o.dbg === 3) console.log('STATE down', e.clientX, e.clientY, shipScr.map((v) => v.toFixed(0)).join(','), hitShip(e)); if (hitShip(e)) { mode = att ? 'pull' : 'free'; gx = e.clientX; gy0 = e.clientY; fo0 = fo.slice(); return; } mode = 'orbit'; drag = true; px = e.clientX; py = e.clientY; pt = performance.now(); vyO = vpO = 0; try { tgt.setPointerCapture(e.pointerId); } catch (err) {} };
+    const down = (e) => { try { tgt.setPointerCapture(e.pointerId); } catch (err) {} if (o.dbg === 3) console.log('STATE down', e.clientX, e.clientY, shipScr.map((v) => v.toFixed(0)).join(','), hitShip(e)); if (hitShip(e)) { mode = att ? 'pull' : 'free'; gx = e.clientX; gy0 = e.clientY; fo0 = fo.slice(); return; } if (o.fixedView) return; mode = 'orbit'; drag = true; px = e.clientX; py = e.clientY; pt = performance.now(); vyO = vpO = 0; try { tgt.setPointerCapture(e.pointerId); } catch (err) {} };
     const move = (e) => { lx = e.clientX; ly = e.clientY;
       if (mode === 'pull') { const raw = toWorld(e), m = Math.hypot(raw[0], raw[1], raw[2]); if (o.dbg === 3) console.log('STATE mv', (e.clientX - gx), (e.clientY - gy0), raw.map((v) => v.toFixed(3)).join(','), shipScr.map((v) => v.toFixed(0)).join(','));
         if (m > DET) { pluck(scl(pl, 0.55), sNow); setAtt(false); mode = 'free'; fo = pl.slice(); pl = [0, 0, 0]; fo0 = [0, 0, 0]; foT = raw; return; }
@@ -470,7 +470,7 @@ const HM = {
       const i0 = Math.max(0, Math.floor((camS - 18) / 0.05)), i1 = Math.min(RPTS.length - 1, Math.ceil((camS + 18) / 0.05));
       const pen = (yw, pt) => { const e = orbit(yw, pt); let m = 1e9; for (let i = i0; i <= i1; i++) { const q = RPTS[i], dx = q[0] - e[0], dy = q[1] - e[1], dz = q[2] - e[2], dd = dx * dx + dy * dy + dz * dz; if (dd < m) m = dd; } return RMIN - Math.sqrt(m); };
       penFn = pen; if (o.dbg && fc < 1) { let out = []; for (let y = -3; y <= 3; y += 0.25) { let row = y.toFixed(2) + ':'; for (let q = -0.7; q <= 0.76; q += 0.15) row += ' ' + pen(y, q).toFixed(2); out.push(row); } console.log(out.join('\n')); }
-      const pn = pen(yawO, pitchO); if (o.dbg === 2) console.log(fc, yawO.toFixed(2), pitchO.toFixed(2), pn.toFixed(3));
+      const pn = o.fixedView ? 0 : pen(yawO, pitchO); if (o.dbg === 2) console.log(fc, yawO.toFixed(2), pitchO.toFixed(2), pn.toFixed(3));
       if (pn > 0) { const ep = 0.01, gy = (pen(yawO + ep, pitchO) - pn) / ep, gp = (pen(yawO, pitchO + ep) - pn) / ep, gl2 = Math.hypot(gy, gp) || 1, pa = Math.min(0.6, pn / gl2) + 0.04, bl = drag ? 0 : 1 - Math.exp(-10 * dt);
         vyO += (-gy / gl2 * pa * 7 - vyO) * bl; vpO += (-gp / gl2 * pa * 7 - vpO) * bl; }
       const eye0 = orbit(yawO, pitchO);

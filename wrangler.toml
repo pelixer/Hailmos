@@ -1,6 +1,8 @@
 # Cloudflare Workers — static site only (no server code). public/ is the finished app; `npx wrangler deploy` uploads it.
 name = "hailmos"
 compatibility_date = "2026-10-01"
+workers_dev = true            # serve at hailmos.<subdomain>.workers.dev
+preview_urls = true
 
 [assets]
 directory = "./public"

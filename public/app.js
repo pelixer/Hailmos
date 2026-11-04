@@ -20,17 +20,17 @@
 
   // ---------- home ----------
   const home = $('#home'), streakCv = $('canvas.lg-streak', home);
-  let cl = null, stopStreak = null;
-  const startStreak = () => { if (stopStreak) stopStreak(); measure(); cl = { on: false, px: 169 * W / 390, py: 476 * H / 844, k: 1, rot: 0, sx: 1, z: 1, soft: 0, spd: 1 }; stopStreak = HM.streaks(streakCv, W, H, { dpr: 2, speeds: [14, 30, 55], hairAlpha: 0.42, collapse: cl }); };
+  let cl = null, stopStreak = null, streakOpt = null;
+  const startStreak = () => { if (stopStreak) stopStreak(); measure(); cl = { on: false, px: 169 * W / 390, py: 476 * H / 844, k: 1, rot: 0, sx: 1, z: 1, soft: 0, spd: 1 }; streakOpt = { dpr: 2, speeds: [14, 30, 55], hairAlpha: 0.42, collapse: cl, paused: false }; stopStreak = HM.streaks(streakCv, W, H, streakOpt); };
+  const restHome = (on) => { if (streakOpt) streakOpt.paused = on; };   // home is fully covered by a sheet: no need to keep painting it
   const fx = (v) => (v < 10 ? v.toFixed(2) : v < 1000 ? v.toFixed(1) : Math.round(v).toLocaleString('en-US'));
   const clock = (t) => (t < 60 ? t + ':00' : Math.floor(t / 60) + ':' + String(t % 60).padStart(2, '0') + ':00');
   const setHomeRoute = () => { const m = app.last;
     $('#h-rt').textContent = m ? m.o.name.toUpperCase() + ' → ' + m.d.name.toUpperCase() : 'FROM ' + (core.state.visited[core.state.visited.length - 1] || 'Earth').toUpperCase();
     $('#h-rs').textContent = m ? fx(m.dv) + ' ' + m.du + ' · ' + clock(m.t) : 'SET A COURSE'; };
   const hbtn = (label) => $('#home button[aria-label="' + label + '"]');
-  hbtn('목적지').addEventListener('click', () => openSheet());
-  hbtn('출항').addEventListener('click', () => { if (app.last && app.mode === 'home') launch(app.last, true); else openSheet(); });
-  hbtn('항해 기록').addEventListener('click', () => openLog());
+  hbtn('출항').addEventListener('click', () => openSheet());          // the one action on home: choose time & course, launch from there
+  $('#h-log button').addEventListener('click', () => openLog());
 
   // ---------- timer sheet ----------
   const sheet = $('#sheet'), list = $('#s-list'), slider = $('#rt-min'), search = $('#rt-q');
@@ -74,8 +74,8 @@
   search.addEventListener('input', () => core.setState({ q: search.value, sel: null }));
   search.addEventListener('keydown', (e) => { if (e.key === 'Enter') search.blur(); });
   const openSheet = () => { if (app.mode !== 'home') return; app.mode = 'sheet'; core.state.sel = null; core.state.q = ''; search.value = ''; renderSheet(); list.scrollTop = 0; sheet.classList.add('open');
-    core._dead = false; cancelAnimationFrame(core._raf); core._raf = requestAnimationFrame((t) => core.plTick(t)); };
-  const closeSheet = () => { sheet.classList.remove('open'); if (app.mode === 'sheet') app.mode = 'home'; setTimeout(() => { if (!sheet.classList.contains('open')) { core._dead = true; cancelAnimationFrame(core._raf); } }, 700); };
+    core._dead = false; cancelAnimationFrame(core._raf); core._raf = requestAnimationFrame((t) => core.plTick(t)); setTimeout(() => { if (sheet.classList.contains('open')) restHome(true); }, 700); };
+  const closeSheet = () => { restHome(false); sheet.classList.remove('open'); if (app.mode === 'sheet') app.mode = 'home'; setTimeout(() => { if (!sheet.classList.contains('open')) { core._dead = true; cancelAnimationFrame(core._raf); } }, 700); };
   $('#s-close').addEventListener('click', closeSheet);
 
   // ---------- flight log ----------
@@ -84,8 +84,8 @@
     $('#g-count').textContent = E.length + ' ROUTES · ' + core.state.visited.length + ' PLANETS';
     $('#g-list').innerHTML = E.length ? E.map(([k, n]) => { const [a, b] = k.split('|'); return '<div style="display:flex;align-items:center;gap:14px;padding:14px 20px;border-bottom:1px solid rgba(255,226,190,0.08)"><div style="flex:1;min-width:0;font-family:\'Michroma\',sans-serif;font-size:10.5px;letter-spacing:0.08em;color:#ffd9b0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">' + esc(a.toUpperCase()) + ' ↔ ' + esc(b.toUpperCase()) + '</div>' + streakSvg(core.streak(n, 54)) + '<div style="width:28px;text-align:right;font-size:10px;color:#ffd9b0">×' + n + '</div></div>'; }).join('')
       : '<div style="padding:40px 20px;text-align:center;font-size:11px;color:rgba(255,234,210,0.45)">아직 다녀온 항로가 없습니다</div>';
-    logEl.classList.add('open'); };
-  const closeLog = () => { logEl.classList.remove('open'); if (app.mode === 'log') app.mode = 'home'; };
+    logEl.classList.add('open'); setTimeout(() => { if (logEl.classList.contains('open')) restHome(true); }, 700); };
+  const closeLog = () => { restHome(false); logEl.classList.remove('open'); if (app.mode === 'log') app.mode = 'home'; };
   $('#g-close').addEventListener('click', closeLog);
 
   // ---------- focus voyage ----------

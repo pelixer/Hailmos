@@ -17,6 +17,10 @@ HOMEUI = hb[:hb.rstrip().rindex('</div>')]
 HOMEUI = (HOMEUI.replace('margin-right: -0.42em; color: #fff1e0;', 'margin-right: -0.42em; max-width: 300px; margin-left: auto; line-height: 1.9; text-wrap: balance; color: #fff1e0;')
           .replace('>EARTH → MARS<', ' id="h-rt">FROM EARTH<').replace('>2.25E8 km · 25:00<', ' id="h-rs">SET A COURSE<'))
 assert 'id="h-rt"' in HOMEUI and 'id="h-rs"' in HOMEUI
+# one clear action on home: the centre button opens time & course; the log moves to a small top-right button
+for lab in ('목적지', '항해 기록'):
+    i0 = HOMEUI.index('<button aria-label="' + lab + '"'); i1 = HOMEUI.index('</button>', i0) + len('</button>'); HOMEUI = HOMEUI[:i0] + HOMEUI[i1:]
+assert '<button aria-label="출항"' in HOMEUI and '목적지' not in HOMEUI
 RB = {}; exec(open(SRC + '/lab/gen_routes_b2.py').read(), RB)          # PAINT (planet painter + launchGo), VALS, SLIDER_CSS …
 from routes_engine import ENGINE, REGION_COL
 SCR = open(SRC + '/lab/scramble.js').read()
@@ -126,6 +130,7 @@ html,body{{margin:0;height:100%;background:#000;overflow:hidden;overscroll-behav
     <canvas class="lg-streak hb-cv fill" aria-hidden="true"></canvas>
     <div class="hui" style="position:absolute;inset:0">
 {HOMEUI}
+      <div style="position:absolute;right:18px;top:10px" id="h-log">{ic('log', '항해 기록', 40)}</div>
     </div>
   </div>
 

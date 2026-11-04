@@ -59,6 +59,7 @@ const HM = {
   const frame = (ts) => {
     if (stopped) return;
     if (!t0) { t0 = ts; lt = ts; } const half = S / 2, dt = Math.min(0.05, (ts - lt) / 1000); lt = ts;
+    if (opt.paused) { raf = requestAnimationFrame(frame); return; }
     const mul = (opt.collapse && opt.collapse.on && opt.collapse.spd) || 1; for (let i = 0; i < 3; i++) ph[i] += dt * speeds[i] * mul;
     const off = (i) => ((ph[i] * dpr) % S + S) % S;
     // coloured hairs: white mask, keep only where hairs are, filled with the boosted field
@@ -147,6 +148,10 @@ const HM = {
     // ---------- GL ----------
     gcv.width = W * gd; gcv.height = H * gd;
     const gl = gcv.getContext('webgl', { antialias: true, alpha: true, premultipliedAlpha: true });
+    // uniform/attribute locations are looked up hundreds of times a frame: answer from a per-program cache (same values, no driver round-trips)
+    if (gl && !gl.__hmCache) { gl.__hmCache = true; const ul = gl.getUniformLocation.bind(gl), al = gl.getAttribLocation.bind(gl);
+      gl.getUniformLocation = (p, n) => { const c = p.__ul || (p.__ul = new Map()); let v = c.get(n); if (v === undefined) { v = ul(p, n); c.set(n, v); } return v; };
+      gl.getAttribLocation = (p, n) => { const c = p.__al || (p.__al = new Map()); let v = c.get(n); if (v === undefined) { v = al(p, n); c.set(n, v); } return v; }; }
     const ext = gl.getExtension('OES_element_index_uint');
     const SH = (t, s) => { const x = gl.createShader(t); gl.shaderSource(x, s); gl.compileShader(x); if (!gl.getShaderParameter(x, gl.COMPILE_STATUS)) throw new Error(gl.getShaderInfoLog(x)); return x; };
     const PR = (vs, fs) => { const p = gl.createProgram(); gl.attachShader(p, SH(gl.VERTEX_SHADER, vs)); gl.attachShader(p, SH(gl.FRAGMENT_SHADER, fs)); gl.linkProgram(p); if (!gl.getProgramParameter(p, gl.LINK_STATUS)) throw new Error(gl.getProgramInfoLog(p)); return p; };
@@ -417,7 +422,8 @@ const HM = {
       // journey clock: orbits always run; legs only while the ship rides the route
       PH = phaseAt(jT); onLeg = PH.g.kind === 'leg'; jT += dt * (onLeg ? mv : 1) * (introDone ? 1 : sm3(7.6, 8.8, o.introT != null ? o.introT : iT)); jF += dt;   // after touchdown the ship eases into its orbit
       let IV = null;
-      if (!introDone) { if (o.introGo) iT = Math.min(TI, iT + dt); const it = o.introT != null ? o.introT : iT; if (it >= TI && o.introT == null) { introDone = true; if (o.onIntroEnd) o.onIntroEnd(); }
+      if (!introDone) { if (o.introGo) iT = Math.min(TI, iT + dt); const it = o.introT != null ? o.introT : iT; if (it >= TI && o.introT == null) { introDone = true; if (o.onIntroEnd) o.onIntroEnd();
+          if (MI) { gl.deleteBuffer(MI.v); gl.deleteBuffer(MI.i); MI = null; } if (TX) { gl.deleteTexture(TX); TX = null; } }   // the opening's sheet and hand-off image are never drawn again: free them
         const Ei = (a, b, x) => { const v = Math.max(0, Math.min(1, (x - a) / (b - a))); return v < 0.5 ? 4 * v * v * v : 1 - Math.pow(-2 * v + 2, 3) / 2; }, Ii = (a, b, x) => { const v = Math.max(0, Math.min(1, (x - a) / (b - a))); return v * v; };
         const g0 = SEGS[0], sc = g0.s0 + 0.08 + 0.6 * Ei(0.15, 3.7, it), hd = Math.min(g0.s1 + 0.5, sc + 0.45 + Math.max(0, g0.s1 + 0.5 - sc - 0.45) * Ei(1.7, 4.7, it));
         iFt += dt * (2.2 + 26 * Ii(0, 1.5, it) - 22 * Ei(2.5, 5.0, it));
@@ -613,7 +619,7 @@ const HM = {
         ctx.strokeStyle = 'rgba(' + c[0] + ',' + c[1] + ',' + c[2] + ',' + (a * 0.14).toFixed(3) + ')'; ctx.lineWidth = S.lw * 4.2 * dpr; ctx.stroke();
         ctx.strokeStyle = 'rgba(' + Math.min(255, c[0] + 8) + ',' + Math.min(255, c[1] + 12) + ',' + Math.min(255, c[2] + 8) + ',' + (a * 0.9).toFixed(3) + ')'; ctx.lineWidth = S.lw * dpr; ctx.stroke();
       }
-      for (const Hh of G.hairs) {
+      if (o.hairs) for (const Hh of G.hairs) {
         const P = Hh.c.P, N = Hh.c.N, i = Hh.i, life = 0.5 + 0.5 * Math.sin(t * Hh.sp + Hh.ph); if (life < 0.25) continue;
         const L = Hh.L * life * (1 + burst * 3) * (1 - 0.5 * calm), nx = N[i][0], ny = N[i][1], tx = -ny, ty = nx, cu = Hh.curl + 0.5 * Math.sin(t * 2.3 + Hh.ph);
         const x0 = P[i][0] + nx * 1.5, y0 = P[i][1] + ny * 1.5, x2 = x0 + nx * L + tx * cu * L * 0.5, y2 = y0 + ny * L + ty * cu * L * 0.5, x1 = x0 + nx * L * 0.5 - tx * cu * L * 0.4, y1 = y0 + ny * L * 0.5 - ty * cu * L * 0.4;

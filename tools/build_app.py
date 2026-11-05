@@ -122,7 +122,7 @@ html,body{{margin:0;height:100%;background:#000;overflow:hidden;overscroll-behav
       <div class="jh-km" style="margin-top:2px;font-size:11px;letter-spacing:0.08em;color:rgba(232,224,255,0.55)"></div>
     </div>
     <div class="vui" style="position:absolute;left:18px;top:calc(env(safe-area-inset-top) + 10px)" id="v-home">{ic('home', '홈으로', 40)}</div>
-    <div class="vui" style="position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 28px);display:flex;justify-content:center" id="v-calm">{ic('sound', '화면 비우기', 52)}</div>
+    <div class="vui" style="position:absolute;left:0;right:0;bottom:calc(env(safe-area-inset-bottom) + 28px);display:flex;justify-content:center" id="v-calm">{ic('sound', '앰비언트 사운드', 52)}</div>
   </div>
 
   <!-- home: the light streak -->
@@ -164,6 +164,7 @@ html,body{{margin:0;height:100%;background:#000;overflow:hidden;overscroll-behav
 <script>const LAUNCH_BTN = {json.dumps(ic('launch', '출항', 52, True))};</script>
 <script src="/engine.js"></script>
 <script src="/routes.js"></script>
+<script src="/sound.js"></script>
 <script src="/app.js"></script>
 </body>
 </html>
@@ -208,7 +209,7 @@ open(OUT + '/_headers', 'w').write('''/*
 # cache-busting: every script URL carries a content hash, so a new deploy never runs against an older cached script
 import hashlib
 idx = open(OUT + '/index.html').read()
-for f in ('engine.js', 'routes.js', 'app.js'):
+for f in ('engine.js', 'routes.js', 'sound.js', 'app.js'):
     v = hashlib.sha1(open(OUT + '/' + f, 'rb').read()).hexdigest()[:10]
     idx = re.sub(r'src="/' + re.escape(f) + r'(\?v=[0-9a-f]+)?"', 'src="/' + f + '?v=' + v + '"', idx)
 open(OUT + '/index.html', 'w').write(idx)

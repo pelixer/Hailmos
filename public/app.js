@@ -103,7 +103,7 @@
         cruise: Math.max(16, Math.min(700, 0.6 * leg)), curve: Math.min(0.02, 0.35 / Math.max(16, Math.min(700, 0.6 * leg))),
         planetsData: { list: [size(m.o.v), size(m.d.v)] }, legDur: leg,
         intro: { dur: 8.8 }, introSrc: () => streakCv, introGo: false, onIntroEnd: () => voyEl.classList.remove('introing'),
-        onState: (v) => { this.st.on = v; this.sync(); this.render(); }, onPhase: (ph) => this.phase(ph), onFrame: (f) => this.frame(f) });
+        onState: (v) => { this.st.on = v; this.sync(); this.render(); HMSound.adrift(!v); }, onPhase: (ph) => this.phase(ph), onFrame: (f) => this.frame(f) });
       this.fire = HM.fireTimer($('canvas.jh-tm', voyEl), 390, 92, { size: 50, fps: 30 });   // slow-writhing filaments: 30 redraws a second are enough this.sync(); this.render();
     }
     go() { this.eng.set('introGo', true); }
@@ -122,7 +122,7 @@
       clearTimeout(this.tt); this.side = null; this.hd = null; const tag = $('.jh-tag', voyEl);
       Object.assign(this.st, { kind: ph.kind, k: ph.k, p: 0, final: !!ph.final }); this.sync(); this.render();
       tag.style.opacity = 0; $('.jh-lp', tag).style.strokeDashoffset = 100; $('.jh-dm', tag).style.opacity = 0;
-      if (ph.final) landed();
+      HMSound.phase(ph.kind); if (ph.final) { HMSound.land(); landed(); }
       if (ph.kind !== 'orbit') return;
       const MM = this.meta[ph.k];
       this.tt = setTimeout(() => { const n = $('.jh-tn', tag), nl = MM.name.length, ns = nl > 14 ? 0.16 : nl > 9 ? 0.24 : 0.36; n.textContent = MM.name; n.style.fontSize = (nl > 14 ? 10.5 : 12) + 'px'; n.style.letterSpacing = ns + 'em';
@@ -147,6 +147,7 @@
   // ---------- launch: the home streak hands its very pixels to the 3D opening ----------
   async function launch(m, fromHome) {
     if (app.mode !== 'sheet' && !(fromHome && app.mode === 'home')) return;
+    HMSound.start(); soundBtn();   // still inside the launch tap: iOS lets audio begin only from a gesture
     app.last = m; app.flying = core._pending || [m.o.name, core._ix[m.d.name]]; save(); setHomeRoute();
     if (app.mode === 'sheet') { closeSheet(); app.mode = 'launching'; await wait(620); } else app.mode = 'launching';
     try { app.voy = new Voyage(m); } catch (e) { console.error(e); if (app.voy) { try { app.voy.stop(); } catch (er) {} } app.voy = null; voyEl.style.display = 'none'; home.classList.remove('leaving'); app.mode = 'home'; return; }
@@ -162,6 +163,7 @@
     setTimeout(() => { if (app.mode !== 'focus') return; app.mode = 'landed'; $('#l-rt').textContent = app.last.o.name.toUpperCase() + '  →  ' + app.last.d.name.toUpperCase(); $('#landed').classList.add('on'); }, 2600);
   }
   function goHome() {
+    HMSound.stop();
     $('#landed').classList.remove('on'); app.flying = null;
     if (app.voy) { app.voy.stop(); app.voy = null; }
     try { if (app.lock) app.lock.release(); } catch (e) {} app.lock = null;
@@ -170,7 +172,8 @@
   }
   $('#l-home button').addEventListener('click', goHome);
   $('#v-home button').addEventListener('click', goHome);
-  $('#v-calm button').addEventListener('click', () => voyEl.classList.toggle('calm'));
+  const soundBtn = () => { const b = $('#v-calm button'); b.style.opacity = HMSound.on ? 1 : 0.42; b.setAttribute('aria-pressed', HMSound.on ? 'true' : 'false'); };
+  $('#v-calm button').addEventListener('click', () => { HMSound.toggle(); soundBtn(); });   // the ambient sound, on or off (remembered)
   document.addEventListener('visibilitychange', async () => { if (document.visibilityState === 'visible' && app.mode === 'focus' && !app.lock && navigator.wakeLock) { try { app.lock = await navigator.wakeLock.request('screen'); } catch (e) {} } });
 
   if (/[?&]debug\b/.test(location.search)) window.__hm = { app, core, landed, goHome };   // review hook only

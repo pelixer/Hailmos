@@ -29,7 +29,8 @@ const HMSound = (() => {
     // humming drone: D2 saw pair (slow beating) + A2 triangle, through a breathing low-pass; a sine sub for headphones
     droneLP = ac.createBiquadFilter(); droneLP.type = 'lowpass'; droneLP.frequency.value = 380; droneLP.Q.value = 1.2;
     const dg = ac.createGain(); dg.gain.value = 0.2; droneLP.connect(dg); dg.connect(out); const ds = ac.createGain(); ds.gain.value = 0.08; dg.connect(ds); ds.connect(revIn);
-    [[73.42, 'sawtooth', 0.38], [73.42 * 1.0035, 'sawtooth', 0.34], [110.0, 'triangle', 0.35], [146.83, 'triangle', 0.9], [146.83 * 0.997, 'sawtooth', 0.22]]   // D3 layer: the hum stays audible on a phone speaker.forEach(([f, t, g]) => { const o = ac.createOscillator(); o.type = t; o.frequency.value = f; const gg = ac.createGain(); gg.gain.value = g; o.connect(gg); gg.connect(droneLP); o.start(); });
+    // D3 layer: the hum stays audible on a phone speaker
+    [[73.42, 'sawtooth', 0.38], [73.42 * 1.0035, 'sawtooth', 0.34], [110.0, 'triangle', 0.35], [146.83, 'triangle', 0.9], [146.83 * 0.997, 'sawtooth', 0.22]].forEach(([f, t, g]) => { const o = ac.createOscillator(); o.type = t; o.frequency.value = f; const gg = ac.createGain(); gg.gain.value = g; o.connect(gg); gg.connect(droneLP); o.start(); });
     const sub = ac.createOscillator(); sub.frequency.value = 36.71; const sg = ac.createGain(); sg.gain.value = 0.09; sub.connect(sg); sg.connect(out); sub.start();
     const lfo = ac.createOscillator(); lfo.frequency.value = 0.07; const lg = ac.createGain(); lg.gain.value = 170; lfo.connect(lg); lg.connect(droneLP.frequency); lfo.start();   // the "woom… woom"
     const alfo = ac.createOscillator(); alfo.frequency.value = 0.11; const ag = ac.createGain(); ag.gain.value = 0.05; alfo.connect(ag); ag.connect(dg.gain); alfo.start();

@@ -197,7 +197,8 @@ const HM = {
     let tailZ = 0; for (let i = 2; i < BA[0].length; i += 11) tailZ = Math.max(tailZ, BA[0][i]);
     // ---------- multi-leg journey: parking orbit → leg → orbit → leg … → final orbit. Every orbit lies in its planet's equatorial plane ----------
     const PD = o.planetsData || {}, LIST = PD.list || [PD.from, PD.to].filter(Boolean), PERCH = (o.shipScale || 0.06) * (tailZ + 0.03);
-    const D0 = [0, 0, 1], UP = [0, 1, 0], H1 = o.rise || 0.9, H2 = o.fall || 0.9, KC = o.curve == null ? 0.035 : o.curve, CLB = 0.012, LC = o.cruise || 16;
+    const D0 = [0, 0, 1], UP = [0, 1, 0], H1 = o.rise || 0.9, H2 = o.fall || 0.9, KC = o.curve == null ? 0.035 : o.curve, CLB = 0.012, LC0 = o.cruise || 16;
+    const TMV = o.legSpeed || 0, TM_A = 30, TM_P = 70, TM_E = 220, TMR = {};   // treadmill: start of the repeating stretch (into the cruise), its period, the view kept ahead of it
     const bez = (A, B, C, E, t) => { const u = 1 - t; return [0, 1, 2].map((i) => u * u * u * A[i] + 3 * u * u * t * B[i] + 3 * u * t * t * C[i] + t * t * t * E[i]); };
     const AZ = [-2.2, 0.9, 2.4, -0.6, 1.7, -1.4], TURN = o.turns || [0.55, -0.6, 0.5, -0.45, 0.6];
     const PL = LIST.map((d, k) => { const R = d.R || 0.3, OKk = d.orbitK || 1.45; return { d, k, R, ax: axisOf(d.tilt || 0, AZ[k % AZ.length]), RO: R * OKk, C: [0, 0, 0] }; });
@@ -214,20 +215,30 @@ const HM = {
         const i0 = RAW.length - 1; ringPts(P, 0, thd, Math.ceil(700 * thd / Math.PI)); RAW.splice(i0 + 1, 1); SEGS.push({ kind: 'orbit', k, i0, i1: RAW.length - 1 }); }
       // leg k → k+1
       const N = PL[k + 1], Dp = RAW[RAW.length - 1], tDep = vn(va(Hn, P.ax, -vd(Hn, P.ax))), sc = Math.max(1, P.RO / 0.47), Hh = vn([Hn[0], 0, Hn[2]]);
-      const Q = [Dp[0] + Hh[0] * H1 * 1.9 * sc, Dp[1] + 0.3 * H1, Dp[2] + Hh[2] * H1 * 1.9 * sc], ps0 = Math.atan2(Hh[0], Hh[2]), kap = KC * (k % 2 ? -1 : 1);
-      const cru = (t) => [Q[0] + (Math.cos(ps0) - Math.cos(ps0 + kap * t)) / kap, Q[1] + CLB * t, Q[2] + (Math.sin(ps0 + kap * t) - Math.sin(ps0)) / kap];
+      const Q = [Dp[0] + Hh[0] * H1 * 1.9 * sc, Dp[1] + 0.3 * H1, Dp[2] + Hh[2] * H1 * 1.9 * sc], ps0 = Math.atan2(Hh[0], Hh[2]), kap = TMV ? 0 : KC * (k % 2 ? -1 : 1);
+      const cru = (t) => (kap === 0 ? [Q[0] + Hh[0] * t, Q[1] + CLB * t, Q[2] + Hh[2] * t] : [Q[0] + (Math.cos(ps0) - Math.cos(ps0 + kap * t)) / kap, Q[1] + CLB * t, Q[2] + (Math.sin(ps0 + kap * t) - Math.sin(ps0)) / kap]);
+      let LC = LC0, tmN = 0;
+      if (TMV) { // the leg's true length is speed × time; a straight cruise up to A + 2P + E is built, the rest is folded into n repeats of the period P
+        const blen = (A, B, C, E2) => { let L = 0, pv = A; for (let i = 1; i <= 200; i++) { const q = bez(A, B, C, E2, i / 200); L += Math.hypot(q[0] - pv[0], q[1] - pv[1], q[2] - pv[2]); pv = q; } return L; };
+        const rise = blen(Dp, va(Dp, tDep, H1 * 0.8 * sc), va(Q, Hh, -H1 * 0.8 * sc), Q), h2f = Math.max(H2, N.RO * 1.15), Z = [0, 0, 0], PJz = [Hh[0] * h2f * 1.5, -h2f * 0.22, Hh[2] * h2f * 1.5];
+        N.tt = vn(va(Hh, N.ax, -vd(Hh, N.ax))); const fall = blen(Z, [Hh[0] * h2f * 0.6, CLB * h2f * 0.6, Hh[2] * h2f * 0.6], va(PJz, N.tt, -h2f * 0.55), PJz);
+        const need = TMV * (o.legDur || 10) - rise - fall, LMAX = TM_A + 2 * TM_P + TM_E;
+        if (need <= LMAX) LC = Math.max(4, need); else { tmN = Math.ceil((need - LMAX) / TM_P); LC = need - tmN * TM_P; }
+        TMR[k] = { riseApprox: rise, n: tmN }; }
       const i0 = RAW.length - 1;
       for (let i = 1; i <= 700; i++) RAW.push(bez(Dp, va(Dp, tDep, H1 * 0.8 * sc), va(Q, Hh, -H1 * 0.8 * sc), Q, i / 700));
-      { const cs = Math.max(0.01, LC / 24000); for (let i = 1; i <= Math.ceil(LC / cs); i++) RAW.push(cru(Math.min(LC, i * cs))); }
+      const iCru = RAW.length - 1; { const cs = Math.max(0.01, LC / 24000); for (let i = 1; i <= Math.ceil(LC / cs); i++) RAW.push(cru(Math.min(LC, i * cs))); }
       const R0 = cru(LC), De = [Math.sin(ps0 + kap * LC), 0, Math.cos(ps0 + kap * LC)], h2 = Math.max(H2, N.RO * 1.15);
       N.tt = vn(va(De, N.ax, -vd(De, N.ax))); N.rr = vn(vx(N.tt, N.ax)); N.fh = vn(De);
       const PJ = [R0[0] + De[0] * h2 * 1.5, R0[1] - h2 * 0.22, R0[2] + De[2] * h2 * 1.5]; N.C = va(PJ, N.rr, -N.RO);
       for (let i = 1; i <= 700; i++) RAW.push(bez(R0, [R0[0] + De[0] * h2 * 0.6, R0[1] + CLB * h2 * 0.6, R0[2] + De[2] * h2 * 0.6], va(PJ, N.tt, -h2 * 0.55), PJ, i / 700));
-      SEGS.push({ kind: 'leg', k, i0, i1: RAW.length - 1 });
+      SEGS.push({ kind: 'leg', k, i0, i1: RAW.length - 1, iCru, tmN });
       Hn = De;
     }
     const ALEN = [0]; for (let i = 1; i < RAW.length; i++) ALEN.push(ALEN[i - 1] + Math.hypot(RAW[i][0] - RAW[i - 1][0], RAW[i][1] - RAW[i - 1][1], RAW[i][2] - RAW[i - 1][2]));
-    const SMAX = ALEN[ALEN.length - 1]; SEGS.forEach((g) => { g.s0 = ALEN[g.i0]; g.s1 = ALEN[g.i1]; });
+    const SMAX = ALEN[ALEN.length - 1]; SEGS.forEach((g) => { g.s0 = ALEN[g.i0]; g.s1 = ALEN[g.i1]; if (g.tmN) g.zA = ALEN[g.iCru] + TM_A; });
+    const TZ = SEGS.filter((g) => g.tmN).map((g) => ({ a: g.zA, b: g.zA + TM_P + TM_E + 40 }));   // treadmill zones: everything in them repeats every TM_P
+    const inTZ = (sv) => TZ.some((z) => sv >= z.a && sv < z.b);
     PL.forEach((P) => { const g = SEGS.find((q) => q.kind === 'orbit' && q.k === P.k); P.sa = g.s0; P.sb = g.final ? SMAX : g.s1; });
     const TAN = RAW.map((_, i) => vn([RAW[Math.min(i + 1, RAW.length - 1)][0] - RAW[Math.max(i - 1, 0)][0], RAW[Math.min(i + 1, RAW.length - 1)][1] - RAW[Math.max(i - 1, 0)][1], RAW[Math.min(i + 1, RAW.length - 1)][2] - RAW[Math.max(i - 1, 0)][2]]));
     const RGT = [vn(vx(TAN[0], UP))]; for (let i = 1; i < RAW.length; i++) { const r = RGT[i - 1], t = TAN[i]; RGT.push(vn(va(r, t, -vd(r, t)))); }
@@ -242,24 +253,27 @@ const HM = {
     const phaseAt = (jt) => { let g = SEGS[SEGS.length - 1]; for (const q of SEGS) if (jt < q.t0 + q.dur) { g = q; break; } const tt = jt - g.t0;
       if (g.final) return { g, s: g.s0 + (tt * PL[g.k].CIRC / OPER) % PL[g.k].CIRC, p: 1 };
       if (g.kind === 'orbit') return { g, s: g.s0 + (g.s1 - g.s0) * Math.min(1, tt / g.dur), p: tt / g.dur };
-      return { g, s: g.s0 + (g.s1 - g.s0) * profAt(tt / g.dur), p: tt / g.dur }; };
+      { const Lg = g.s1 - g.s0, n = g.tmN || 0; let l = (Lg + n * TM_P) * profAt(tt / g.dur), off = 0;
+        if (n) { const A = g.zA - g.s0; if (l >= A) { off = Math.min(n, Math.floor((l - A) / TM_P)) * TM_P; l -= off; } }
+        return { g, s: g.s0 + l, p: tt / g.dur, off }; } };
+    if (o.dbg === 4) window.__vy = { SEGS, phaseAt };
     // route — screen-space AA ribbons. 'grey' | 'thin' | 'bundle' (fibre bundle in the ship's streak colours, one fibre in five held in the streak's violet band)
     const RVS = 'attribute vec3 aP;attribute vec3 aT;attribute float aS;attribute float aF;attribute float aW;attribute vec3 aC;uniform mat4 uMVP;uniform vec3 uEyeR;uniform vec4 uO[4];varying float vOc;uniform vec3 uOff;uniform vec3 uPl;uniform float uPs;uniform float uPw;uniform float uS;uniform float uPy;uniform float uMin;uniform vec2 uVp;varying float vS;varying float vF;varying float vW;varying float vI;varying vec3 vC;varying float vD;varying float vHp;'
       + 'void main(){vS=aS;vF=aF;vC=aC;float d=aS-uS;vec3 o=uOff*exp(-d*d/0.6)+uPl*exp(-abs(aS-uPs)/uPw);vec4 cp=uMVP*vec4(aP+o,1.),cq=uMVP*vec4(aP+o+aT*0.01,1.);vec2 sp=cp.xy/cp.w*uVp,sq=cq.xy/cq.w*uVp;vec2 dr=sq-sp;dr=length(dr)>1e-6?normalize(dr):vec2(1.,0.);vec2 n=vec2(-dr.y,dr.x);'
       + 'float rp=abs(aW)*uPy/max(cp.w,1e-3),hp=max(rp,uMin);vI=rp/hp;float ext=hp+1.2;vW=sign(aW)*ext/hp;vD=sign(aW)*ext;vHp=hp;cp.xy+=n*sign(aW)*ext/uVp*cp.w;{vec3 q=aP+o-uEyeR;float L=length(q);vec3 dd=q/L;vOc=0.;for(int k=0;k<4;k++){vec3 c=uO[k].xyz-uEyeR;float tc=dot(c,dd);float d2=dot(c,c)-tc*tc;float rr=uO[k].w*uO[k].w;vOc=max(vOc,(tc>0.&&tc<L&&rr>0.)?1.-smoothstep(rr*0.8,rr*1.05,d2):0.);}}gl_Position=cp;}';
-    const RFS = 'precision highp float;varying float vD;varying float vHp;varying float vOc;varying float vS;varying float vF;varying float vW;varying float vI;varying vec3 vC;uniform float uS;uniform float uA;uniform float uGap;uniform float uT;uniform float uPs;uniform float uFl;uniform float uHd;'
+    const RFS = 'precision highp float;varying float vD;varying float vHp;varying float vOc;varying float vS;varying float vF;varying float vW;varying float vI;varying vec3 vC;uniform float uS;uniform float uA;uniform float uGap;uniform float uT;uniform float uPs;uniform float uFl;uniform float uHd;uniform float uSoff;'
       + 'float h(float x){return fract(sin(x*91.7+vF*17.3)*43758.5);}'
-      + 'void main(){float d=vS-uS;float k=d<0.?exp(d/9.):exp(-d/6.);k=0.3+0.7*k;float gap=smoothstep(uGap,uGap*1.45,abs(d));float st=smoothstep(0.,0.3,vS)*smoothstep(uHd+0.02,uHd-0.14,vS);'
-      + 'float cu=0.5+0.5*sin(vS*0.63-uT*0.32+vF*0.9)*sin(vS*0.27+uT*0.19+vF*2.3);float pk=pow(0.5+0.5*sin(vS*0.9-uT*1.1+vF*1.7),16.);float pl=vF<0.?1.:(0.22+1.25*cu*cu*cu)*(0.86+0.14*sin(vS*4.3-uT*1.9+vF*2.4))+0.7*pk;pl*=1.+uFl*exp(-abs(vS-uPs)/1.4);'
-      + 'float gr=vF<0.?1.:0.86+0.14*mix(h(floor(vS*140.)),h(floor(vS*140.)+1.),fract(vS*140.));'
+      + 'void main(){float vT=vS+uSoff;float d=vS-uS;float k=d<0.?exp(d/9.):exp(-d/6.);k=0.3+0.7*k;float gap=smoothstep(uGap,uGap*1.45,abs(d));float st=smoothstep(uHd+0.02,uHd-0.14,vS);'
+      + 'float cu=0.5+0.5*sin(vT*0.63-uT*0.32+vF*0.9)*sin(vT*0.27+uT*0.19+vF*2.3);float pk=pow(0.5+0.5*sin(vT*0.9-uT*1.1+vF*1.7),16.);float pl=vF<0.?1.:(0.22+1.25*cu*cu*cu)*(0.86+0.14*sin(vT*4.3-uT*1.9+vF*2.4))+0.7*pk;pl*=1.+uFl*exp(-abs(vS-uPs)/1.4);'
+      + 'float gr=vF<0.?1.:0.86+0.14*mix(h(floor(vT*140.)),h(floor(vT*140.)+1.),fract(vT*140.));'
       + 'float ad=abs(vD);float pr=clamp(vHp+0.5-ad,0.,1.)*(0.78+0.4*exp(-ad*ad/(vHp*vHp*0.35+0.06)));vec3 cc=vF<0.?vC:mix(vC,vec3(1.,0.86,0.72)*max(max(vC.r,vC.g),vC.b),clamp(pk*0.6+cu*cu*0.25,0.,1.));gl_FragColor=vec4(cc*pl*gr*pr*vI*k*st*gap*uA*(1.-0.92*vOc),1.);}';
     const pR = PR(RVS, RFS);
     const RSTY = o.routeStyle || 'thin', BUN = RSTY === 'bundle', GRY = RSTY === 'grey';
     // aurora ramp (spec #1f4636 → #4f7d5a → #6e8e60 → #8fb07f → #bfd2ae → #a8f0c6) as emissive tones, plus a teal and a lime edge
     const AUR = [[0.10, 0.36, 0.25], [0.24, 0.64, 0.40], [0.40, 0.68, 0.34], [0.52, 0.82, 0.44], [0.70, 0.88, 0.62], [0.52, 1.00, 0.74], [0.18, 0.86, 0.64], [0.30, 0.95, 0.46]];
     const VPAL = [[0.36, 0.24, 0.88], [0.61, 0.35, 0.94]];
-    const RV = [], RI = [], RN = BUN ? Math.min(Math.ceil(SMAX / 0.012), 22000) : 3000, NF = BUN ? (o.routeFibers || 15) : 1;
-    const RRAD = BUN ? (o.routeFiberR || 0.00035) : (o.routeR || (GRY ? 0.0013 : 0.0011)), RB = o.routeBundleR || 0.0041, TW = o.routeTwist || 5.5;
+    const DS = BUN ? TM_P / Math.round(TM_P / Math.max(0.012, SMAX / 22000)) : SMAX / 3000, RV = [], RI = [], RN = Math.ceil(SMAX / DS), NF = BUN ? (o.routeFibers || 15) : 1;
+    const RRAD = BUN ? (o.routeFiberR || 0.00035) : (o.routeR || (GRY ? 0.0013 : 0.0011)), RB = o.routeBundleR || 0.0041, TW = o.routeTwist || (TMV ? 2 * Math.PI * 61 / TM_P : 5.5);
     const FK = BUN ? (o.routeFK || 1.8) : 1;
     const sm3c = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
     const sub0 = (a, b) => [a[0] - b[0], a[1] - b[1], a[2] - b[2]], nrm0 = (a) => { const l = Math.hypot(a[0], a[1], a[2]) || 1; return [a[0] / l, a[1] / l, a[2] / l]; };
@@ -272,10 +286,10 @@ const HM = {
       const tw = TW, fr = RRAD * (BUN ? 0.8 + 0.4 * (0.5 + 0.5 * Math.sin(fi * 5.1)) : 1);
       const ca = VPAL[0], cb = VPAL[1], vio = fi % 5 === 2, band = 0.1 + 0.8 * ((fi * 0.6180339) % 1);
       let pc = null;
-      for (let i = 0; i <= RN + 1; i++) { const s = i / RN * SMAX, p = route(s), q = route(s + 0.01), f = nrm0(sub0(q, p));
+      for (let i = 0; i <= RN + 1; i++) { const s = Math.min(SMAX, i * DS), p = route(s), q = route(s + 0.01), f = nrm0(sub0(q, p));
         const fr0 = frameAt(s), r = fr0.r, u = fr0.u;
         const ph = ph0 + s * tw, c0 = [0, 1, 2].map((j) => p[j] + (r[j] * Math.cos(ph) + u[j] * Math.sin(ph)) * rr);
-        if (pc && i > 0) { const T0 = nrm0(sub0(c0, pc)), sp = (i - 1) / RN * SMAX, m = 0.5 + 0.5 * Math.sin(sp * 0.23 + fi * 1.3) * Math.cos(sp * 0.071 + fi * 0.6), sw = (sp / 7 + fi * 0.137) % 1, tri = sw < 0.5 ? sw * 2 : 2 - sw * 2, sc = BUN ? (vio ? streakCol(0.15 + 0.06 * tri, 0.04 + 0.16 * band) : streakCol(0.12 + 0.76 * tri, 0.15 + 0.7 * band)) : null,
+        if (pc && i > 0) { const T0 = nrm0(sub0(c0, pc)), sp = Math.min(SMAX, (i - 1) * DS), m = 0.5 + 0.5 * Math.sin(sp * 0.23 + fi * 1.3) * Math.cos(sp * 0.071 + fi * 0.6), sw = (sp / 7 + fi * 0.137) % 1, tri = sw < 0.5 ? sw * 2 : 2 - sw * 2, sc = BUN ? (vio ? streakCol(0.15 + 0.06 * tri, 0.04 + 0.16 * band) : streakCol(0.12 + 0.76 * tri, 0.15 + 0.7 * band)) : null,
             col = GRY ? [0.44, 0.45, 0.47] : BUN ? sc.map((x) => x * FK * ik) : [0, 1, 2].map((j) => (ca[j] + (cb[j] - ca[j]) * m) * FK * ik);
           let wA = 0, cA = null, wB = 0, cB = null; for (const P of PL) { const w = BLEND_K * (sp < P.sa ? (P.k ? sm3c(P.sa - BLEND_L, P.sa, sp) : 1) : sp > P.sb ? 1 - sm3c(P.sb, P.sb + BLEND_L, sp) : 1); if (w > wA) { wB = wA; cB = cA; wA = w; cA = plCol(P.d, fi + P.k * 3); } else if (w > wB) { wB = w; cB = plCol(P.d, fi + P.k * 3); } } if (wA + wB > 0.95) { const q = 0.95 / (wA + wB); wA *= q; wB *= q; }
           const colB = [0, 1, 2].map((k) => col[k] * (1 - wA - wB) + (cA ? cA[k] * FK * 0.6 * ik : col[k]) * wA + (cB ? cB[k] * FK * 0.6 * ik : col[k]) * wB);
@@ -294,7 +308,7 @@ const HM = {
       pI = PR(RVS.replace('attribute vec3 aP;', 'attribute vec3 aP;attribute vec3 aO;uniform float uSpr;uniform vec3 uA0;uniform vec3 uT0;uniform vec3 uN0;uniform vec3 uX0;uniform vec3 uR0;uniform vec3 uU0;uniform float uK;uniform float uS0;')
           .replace('void main(){', 'void main(){float d_=aS-uS0,th_=uK*d_,sn_=sin(th_),cs_=cos(th_);float sa_=abs(th_)<0.08?d_*(1.-th_*th_/6.):sn_/uK;float ca_=abs(th_)<0.08?0.5*uK*d_*d_*(1.-th_*th_/12.):(1.-cs_)/uK;vec3 P_=uA0+uT0*sa_+uN0*ca_;vec3 T_=uT0*cs_+uN0*sn_;vec3 o0_=uR0*aO.x+uU0*aO.y;vec3 O_=o0_*cs_+cross(uX0,o0_)*sn_+uX0*dot(uX0,o0_)*(1.-cs_);')
           .split('aP+o').join('P_+O_*uSpr+o').split('aT*0.01').join('T_*0.01'),
-        RFS.replace('uniform float uHd;', 'uniform float uHd;uniform float uFq;uniform float uFt;uniform float uLo;uniform float uHi;uniform float uTop;').replace('float st=smoothstep(0.,0.3,vS)*smoothstep(uHd+0.02,uHd-0.14,vS);', 'float st=smoothstep(uHd+0.04,uHd-0.55,vS)*smoothstep(uLo,uLo+0.4,vS)*smoothstep(uHi,uHi-0.4,vS)*(vF>999.?uTop:1.);').replace('pl*=1.+uFl*exp(-abs(vS-uPs)/1.4);', 'pl=(0.35+0.65*pl)*(0.3+1.35*pow(0.5+0.5*sin(vS*uFq-uFt+vF*5.31),5.)+0.55*pow(0.5+0.5*sin(vS*uFq*0.37-uFt*0.61+vF*2.7),9.));'));
+        RFS.replace('uniform float uHd;', 'uniform float uHd;uniform float uFq;uniform float uFt;uniform float uLo;uniform float uHi;uniform float uTop;').replace('float st=smoothstep(uHd+0.02,uHd-0.14,vS);', 'float st=smoothstep(uHd+0.04,uHd-0.55,vS)*smoothstep(uLo,uLo+0.4,vS)*smoothstep(uHi,uHi-0.4,vS)*(vF>999.?uTop:1.);').replace('pl*=1.+uFl*exp(-abs(vS-uPs)/1.4);', 'pl=(0.35+0.65*pl)*(0.3+1.35*pow(0.5+0.5*sin(vS*uFq-uFt+vF*5.31),5.)+0.55*pow(0.5+0.5*sin(vS*uFq*0.37-uFt*0.61+vF*2.7),9.));'));
       const g0 = SEGS[0], NI = o.introFibers || 420, WI = o.introFiberR || 0.000105, IS = 0.012, OVL = 0.42, n = Math.ceil((g0.s1 - g0.s0 + 2 * OVL) / IS), IV0 = [], II = []; let is = 4242; const ir = () => { is = (is * 16807) % 2147483647; return is / 2147483647; };
       for (let fi = 0; fi < NI; fi++) {
         const top = ir() < 0.36, ox = (ir() * 2 - 1) * (top ? 1.15 : 1), oy = top ? 0.5 + 0.45 * ir() : (ir() + ir() + ir() - 1.5) * 0.22, band = ir(), hot = ir() < 0.06, fw = WI * (0.55 + 0.9 * ir()), base = IV0.length / 15, ik = 0.6 + 0.6 * ir(), off = ir() * 9;
@@ -320,10 +334,14 @@ const HM = {
     const mag = () => { const r = Math.pow(srnd(), 3.2); return { b: 0.45 + 0.9 * r, s: 1.35 + 2.1 * r }; };   // most stars faint, a few brighter
     const SF = [], SM = [], SN = [];
     for (let i = 0; i < (o.farStars || 4200); i++) { const z = srnd() * 2 - 1, a = srnd() * 6.283, rr = Math.sqrt(1 - z * z), R = 150, c = starCol(), m = mag(); SF.push(rr * Math.cos(a) * R, z * R, rr * Math.sin(a) * R, c[0] * m.b, c[1] * m.b, c[2] * m.b, m.s, srnd()); }
-    for (let i = 0; i < (o.midStars || Math.min(9000, Math.round(640 * Math.max(1, SMAX / 40)))); i++) { const sp = -6 + srnd() * (SMAX + 12), q = route(sp), a = srnd() * 6.283, rr = 4 + 30 * Math.sqrt(srnd()), c = starCol(), m = mag();
+    for (let i = 0; i < (o.midStars || Math.min(9000, Math.round(640 * Math.max(1, SMAX / 40)))); i++) { const sp = -6 + srnd() * (SMAX + 12); if (inTZ(sp)) continue; const q = route(sp), a = srnd() * 6.283, rr = 4 + 30 * Math.sqrt(srnd()), c = starCol(), m = mag();
       SM.push(q[0] + Math.cos(a) * rr, q[1] + Math.sin(a) * rr * 0.8, q[2] + (srnd() - 0.5) * 8, c[0] * m.b * 0.9, c[1] * m.b * 0.9, c[2] * m.b * 0.9, m.s * 0.9, srnd()); }
-    for (let i = 0; i < (o.dust || Math.min(3000, Math.round(60 * Math.max(1, SMAX / 40)))); i++) { const sp = -4 + srnd() * (SMAX + 8), q = route(sp), a = srnd() * 6.283, rr = 0.7 + 2.2 * srnd(), c = starCol(), b = 0.05 + 0.08 * srnd();
+    for (let i = 0; i < (o.dust || Math.min(3000, Math.round(60 * Math.max(1, SMAX / 40)))); i++) { const sp = -4 + srnd() * (SMAX + 8); if (inTZ(sp)) continue; const q = route(sp), a = srnd() * 6.283, rr = 0.7 + 2.2 * srnd(), c = starCol(), b = 0.05 + 0.08 * srnd();
       SN.push(q[0] + Math.cos(a) * rr, q[1] + Math.sin(a) * rr, q[2] + (srnd() - 0.5) * 0.8, c[0] * b, c[1] * b, c[2] * b, 1 + srnd(), srnd()); }
+    for (const z of TZ) { const d = sub0(route(z.a + TM_P), route(z.a)), nc = Math.ceil((z.b - z.a) / TM_P) + 1, rm = Math.round(640 / 40 * TM_P), rn = Math.round(60 / 40 * TM_P), base = [];
+      for (let i = 0; i < rm; i++) { const sp = z.a + srnd() * TM_P, q = route(sp), a = srnd() * 6.283, rr = 4 + 30 * Math.sqrt(srnd()), c = starCol(), m = mag(); base.push(['M', q[0] + Math.cos(a) * rr, q[1] + Math.sin(a) * rr * 0.8, q[2] + (srnd() - 0.5) * 8, c[0] * m.b * 0.9, c[1] * m.b * 0.9, c[2] * m.b * 0.9, m.s * 0.9, srnd()]); }
+      for (let i = 0; i < rn; i++) { const sp = z.a + srnd() * TM_P, q = route(sp), a = srnd() * 6.283, rr = 0.7 + 2.2 * srnd(), c = starCol(), b = 0.05 + 0.08 * srnd(); base.push(['N', q[0] + Math.cos(a) * rr, q[1] + Math.sin(a) * rr, q[2] + (srnd() - 0.5) * 0.8, c[0] * b, c[1] * b, c[2] * b, 1 + srnd(), srnd()]); }
+      for (let k = 0; k < nc; k++) for (const st of base) (st[0] === 'M' ? SM : SN).push(st[1] + d[0] * k, st[2] + d[1] * k, st[3] + d[2] * k, st[4], st[5], st[6], st[7], st[8]); }
     const STAR = [[mkBuf(new Float32Array(SF)), SF.length / 8, 1], [mkBuf(new Float32Array(SM)), SM.length / 8, 0], [mkBuf(new Float32Array(SN)), SN.length / 8, 0]];
     // speed dust: a small field that rides with the ship and streams past it during the cruise, so the pace reads on any session length
     const SDN = o.speedDust || 320, SDB = gl.createBuffer(), SD0 = []; for (let i = 0; i < SDN; i++) { const c = starCol(); SD0.push([(srnd() * 2 - 1) * 1.6, (srnd() * 2 - 1) * 1.1, srnd() * 9, c, 0.8 + 1.4 * srnd(), srnd()]); }
@@ -404,8 +422,8 @@ const HM = {
       gl.activeTexture(gl.TEXTURE0); gl.bindTexture(gl.TEXTURE_2D, src.t); gl.uniform1i(gl.getUniformLocation(prog, 'uTex'), 0); gl.uniform2f(gl.getUniformLocation(prog, 'uH'), 0.5 / src.w, 0.5 / src.h); gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4); gl.disableVertexAttribArray(a); };
     const disableAll = () => { for (let i = 0; i < 8; i++) gl.disableVertexAttribArray(i); };
     let lastPV = null, bloomSkipped = false;
-    const INTRO = !!o.intro, TI = (o.intro && o.intro.dur) || 8.8; let landed = false; let iT = 0, iFt = 0, introDone = !INTRO;
-    let raf = 0, t0 = 0, last = 0, stop = false, fc = 0, ang = 0, sNow = 0, jT = (o.t0 || 0) + (o.jt0 || 0), jF = o.t0 || 0, sOff = 0, onLeg = false, curG = null, PH = null;
+    const INTRO = !!o.intro, TI = (o.intro && o.intro.dur) || 8.8; let landed = false; let iT = 0, iFt = 0, introDone = !INTRO, revealHd = null;
+    let lastOff = 0, raf = 0, t0 = 0, last = 0, stop = false, fc = 0, ang = 0, sNow = 0, jT = (o.t0 || 0) + (o.jt0 || 0), jF = o.t0 || 0, sOff = 0, onLeg = false, curG = null, PH = null;
     const sm3 = (a, b, x) => { const t = Math.max(0, Math.min(1, (x - a) / (b - a))); return t * t * (3 - 2 * t); };
     const qOf = (m) => { const [a, b, c, d, e, f, g, h, i] = m, tr = a + e + i; let q; if (tr > 0) { const S = Math.sqrt(tr + 1) * 2; q = [0.25 * S, (h - f) / S, (c - g) / S, (d - b) / S]; } else if (a > e && a > i) { const S = Math.sqrt(1 + a - e - i) * 2; q = [(h - f) / S, 0.25 * S, (b + d) / S, (c + g) / S]; } else if (e > i) { const S = Math.sqrt(1 + e - a - i) * 2; q = [(c - g) / S, (b + d) / S, 0.25 * S, (f + h) / S]; } else { const S = Math.sqrt(1 + i - a - e) * 2; q = [(d - b) / S, (c + g) / S, (f + h) / S, 0.25 * S]; } return q; };
     const slerpB = (B1, B2, t) => { // blend two orthonormal bases [X,Y,Z] (columns) by quaternion slerp
@@ -441,6 +459,7 @@ const HM = {
       const SWAY = [[3.1, 0.016, (p) => Math.sin(2 * Math.PI * p)], [4.3, 0.012, (p) => Math.sin(Math.PI * p) * Math.sin(3 * Math.PI * p)], [2.7, 0.018, (p) => -Math.pow(Math.sin(Math.PI * p), 2)],
         [3.7, 0.014, (p) => Math.sin(2 * Math.PI * p) * (1 - p)], [4.9, 0.017, (p) => Math.pow(Math.sin(Math.PI * p), 3)], [3.3, 0.011, (p) => -Math.sin(2 * Math.PI * p) * p]];
       const surge = beat(SURGE, T) * mv * cruiseK, sway = beat(SWAY, T + 1.3) * cruiseK, sShip = onLeg ? Math.min(PH.g.s1, sBase + surge) : sBase; sNow = sShip;
+      { const dO = (PH.off || 0) - lastOff; lastOff = PH.off || 0; if (dO && camS !== null) { camS -= dO; snapS -= dO; } }   // treadmill fold: carry the camera's lag across it unseen
       if (camS === null || Math.abs(sBase - camS) > 4 || !onLeg) camS = sBase; camS += (sBase - camS) * (1 - Math.exp(-2.2 * dt));
       const camF = frameAt(camS), shF = frameAt(sShip);
       const LIFT = o.lift || 0, bob = (0.006 * Math.sin(T * 2.1 + 0.6) + 0.004 * Math.sin(T * 3.7)) * cruiseK;
@@ -491,6 +510,7 @@ const HM = {
           const fA = x2 > x ? vn(sub(pB, pA)) : ft, fB = vn(add(scl(fA, 1 - x * x), scl(ft, x * x))), YA = vn(va(shF.u, fB, -vd(shF.u, fB))), ZA = scl(fB, -1), XA = vn(vx(YA, ZA));
           Ms = mul([XA[0], XA[1], XA[2], 0, YA[0], YA[1], YA[2], 0, ZA[0], ZA[1], ZA[2], 0, pA[0], pA[1], pA[2], 1], [SHIP, 0, 0, 0, 0, SHIP, 0, 0, 0, 0, SHIP, 0, 0, 0, 0, 1]); }
         else if (!landed) { landed = true; pluck(scl(shF.u, 0.03), sShip); } }
+      if (IV) revealHd = IV.hd; else if (revealHd !== null) { revealHd = Math.max(revealHd + dt * (o.revealSpeed || 5) * Math.min(1, 0.25 + (revealHd - SEGS[0].s1) / 6), sNow + 25); if (revealHd > SMAX + 1) revealHd = null; }
       const PV = mul(Pm, Vm);
       { const fw = nrm(sub(look, eye)), rr2 = nrm(crs(fw, [0, 1, 0])), uu = crs(rr2, fw), dep = Math.max(0.3, (pos[0] - eye[0]) * fw[0] + (pos[1] - eye[1]) * fw[1] + (pos[2] - eye[2]) * fw[2]); camB = { r: rr2, u: uu, wpp: 2 * dep * Math.tan(FOV / 2) / H };
         const c = [0, 1, 2, 3].map((i) => PV[i] * pos[0] + PV[4 + i] * pos[1] + PV[8 + i] * pos[2] + PV[12 + i]); shipScr = [(c[0] / c[3] * 0.5 + 0.5) * W, (0.5 - c[1] / c[3] * 0.5) * H]; }
@@ -541,7 +561,7 @@ const HM = {
         disableAll();
         // route
         gl.useProgram(pR); gl.bindBuffer(gl.ARRAY_BUFFER, MR.v); [['aP', 3, 0], ['aT', 3, 12], ['aS', 1, 24], ['aF', 1, 28], ['aW', 1, 32], ['aC', 3, 36]].forEach(([n, c, of]) => { const l = gl.getAttribLocation(pR, n); if (l < 0) return; gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, c, gl.FLOAT, false, 48, of); }); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, MR.i);
-        gl.uniformMatrix4fv(gl.getUniformLocation(pR, 'uMVP'), false, new Float32Array(PV)); gl.uniform1f(gl.getUniformLocation(pR, 'uS'), sShip); gl.uniform3f(gl.getUniformLocation(pR, 'uEyeR'), eye[0], eye[1], eye[2]); gl.uniform4fv(gl.getUniformLocation(pR, 'uO'), new Float32Array([0, 1, 2, 3].flatMap((k) => PL[k] ? [PL[k].C[0], PL[k].C[1], PL[k].C[2], PL[k].R] : [0, 0, 0, 0]))); gl.uniform3f(gl.getUniformLocation(pR, 'uOff'), latOff[0] * gapK, latOff[1] * gapK, latOff[2] * gapK); gl.uniform3f(gl.getUniformLocation(pR, 'uPl'), uPl[0], uPl[1], uPl[2]); gl.uniform1f(gl.getUniformLocation(pR, 'uPs'), uPs); gl.uniform1f(gl.getUniformLocation(pR, 'uPw'), o.stringW || 1.6); gl.uniform1f(gl.getUniformLocation(pR, 'uFl'), 0.7 * env); gl.uniform1f(gl.getUniformLocation(pR, 'uGap'), SHIP * (o.gap || 1.45) * gapK + 1e-4); gl.uniform1f(gl.getUniformLocation(pR, 'uA'), fadeK * (bp ? (GRY ? 0 : o.routeGlow == null ? 0.5 : o.routeGlow) : 0.85)); gl.uniform1f(gl.getUniformLocation(pR, 'uT'), T); gl.uniform1f(gl.getUniformLocation(pR, 'uHd'), IV ? IV.hd : 1e6); if (IV) gl.uniform1f(gl.getUniformLocation(pR, 'uA'), fadeK * IV.rA * (bp ? (o.routeGlow == null ? 0.5 : o.routeGlow) : 0.85)); const vw = bp ? BW : gcv.width, vh = bp ? BH : gcv.height; gl.uniform2f(gl.getUniformLocation(pR, 'uVp'), vw / 2, vh / 2); gl.uniform1f(gl.getUniformLocation(pR, 'uPy'), Pm[5] * vh / 2); gl.uniform1f(gl.getUniformLocation(pR, 'uMin'), bp ? 0.7 : (o.routeMinPx || 0.5));
+        gl.uniformMatrix4fv(gl.getUniformLocation(pR, 'uMVP'), false, new Float32Array(PV)); gl.uniform1f(gl.getUniformLocation(pR, 'uS'), sShip); gl.uniform3f(gl.getUniformLocation(pR, 'uEyeR'), eye[0], eye[1], eye[2]); gl.uniform4fv(gl.getUniformLocation(pR, 'uO'), new Float32Array([0, 1, 2, 3].flatMap((k) => PL[k] ? [PL[k].C[0], PL[k].C[1], PL[k].C[2], PL[k].R] : [0, 0, 0, 0]))); gl.uniform3f(gl.getUniformLocation(pR, 'uOff'), latOff[0] * gapK, latOff[1] * gapK, latOff[2] * gapK); gl.uniform3f(gl.getUniformLocation(pR, 'uPl'), uPl[0], uPl[1], uPl[2]); gl.uniform1f(gl.getUniformLocation(pR, 'uPs'), uPs); gl.uniform1f(gl.getUniformLocation(pR, 'uPw'), o.stringW || 1.6); gl.uniform1f(gl.getUniformLocation(pR, 'uFl'), 0.7 * env); gl.uniform1f(gl.getUniformLocation(pR, 'uGap'), SHIP * (o.gap || 1.45) * gapK + 1e-4); gl.uniform1f(gl.getUniformLocation(pR, 'uA'), fadeK * (bp ? (GRY ? 0 : o.routeGlow == null ? 0.5 : o.routeGlow) : 0.85)); gl.uniform1f(gl.getUniformLocation(pR, 'uT'), T); gl.uniform1f(gl.getUniformLocation(pR, 'uHd'), IV ? IV.hd : revealHd === null ? 1e6 : revealHd); gl.uniform1f(gl.getUniformLocation(pR, 'uSoff'), (PH && PH.off) || 0); if (IV) gl.uniform1f(gl.getUniformLocation(pR, 'uA'), fadeK * IV.rA * (bp ? (o.routeGlow == null ? 0.5 : o.routeGlow) : 0.85)); const vw = bp ? BW : gcv.width, vh = bp ? BH : gcv.height; gl.uniform2f(gl.getUniformLocation(pR, 'uVp'), vw / 2, vh / 2); gl.uniform1f(gl.getUniformLocation(pR, 'uPy'), Pm[5] * vh / 2); gl.uniform1f(gl.getUniformLocation(pR, 'uMin'), bp ? 0.7 : (o.routeMinPx || 0.5));
         gl.drawElements(gl.TRIANGLES, MR.c, IT, 0); disableAll();
         if (IV && MI && IV.aI > 0.003) { gl.useProgram(pI); gl.bindBuffer(gl.ARRAY_BUFFER, MI.v); [['aP', 3, 0], ['aT', 3, 12], ['aS', 1, 24], ['aF', 1, 28], ['aW', 1, 32], ['aC', 3, 36], ['aO', 3, 48]].forEach(([n, c, of]) => { const l = gl.getAttribLocation(pI, n); if (l < 0) return; gl.enableVertexAttribArray(l); gl.vertexAttribPointer(l, c, gl.FLOAT, false, 60, of); }); gl.bindBuffer(gl.ELEMENT_ARRAY_BUFFER, MI.i);
           const ul = (n) => gl.getUniformLocation(pI, n), vw = bp ? BW : gcv.width, vh = bp ? BH : gcv.height;
@@ -568,7 +588,7 @@ const HM = {
       scene(false); gl.enable(gl.BLEND); gl.blendFunc(gl.ONE, gl.ONE); quadDraw(F3.t, 0, 0, o.bloom || 2.4); gl.disable(gl.BLEND); disableAll();
       if (o.onFrame) { const pj = (q, rr) => { const w = PV[3] * q[0] + PV[7] * q[1] + PV[11] * q[2] + PV[15]; if (w < 0.05) return null; return [((PV[0] * q[0] + PV[4] * q[1] + PV[8] * q[2] + PV[12]) / w * 0.5 + 0.5) * W, (0.5 - (PV[1] * q[0] + PV[5] * q[1] + PV[9] * q[2] + PV[13]) / w * 0.5) * H, rr * Pm[5] * H / 2 / w]; };
         const Pk = PL[PH.g.k], orb = []; if (Pk && Pk.rr && PH.g.kind === 'orbit') for (const rad of Pk.d.ring ? [Pk.RO, 2.27 * Pk.R] : [Pk.RO]) for (let i = 0; i < 64; i++) { const th = i / 64 * 6.2832, sp = pj([0, 1, 2].map((j) => Pk.C[j] + rad * (Pk.rr[j] * Math.cos(th) + Pk.tt[j] * Math.sin(th))), 0); if (sp) orb.push(sp); }
-        o.onFrame({ kind: PH.g.kind, k: PH.g.k, p: PH.p, final: !!PH.g.final, planets: PL.map((P) => pj(P.C, P.R)), orb }); }
+        o.onFrame({ kind: PH.g.kind, k: PH.g.k, p: PH.p, off: PH.off || 0, final: !!PH.g.final, planets: PL.map((P) => pj(P.C, P.R)), orb }); }
       if (o.frames && ++fc >= o.frames) return;
       raf = requestAnimationFrame(frame);
     };

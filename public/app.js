@@ -96,15 +96,15 @@
       this.meta = [m.o, m.d].map((x) => ({ name: x.name.toUpperCase(), data: x.data }));
       voyEl.classList.add('introing'); voyEl.classList.remove('calm'); voyEl.style.display = 'block';
       const tag = $('.jh-tag', voyEl); tag.style.opacity = 0; $('.jh-lp', tag).style.strokeDashoffset = 100; $('.jh-dm', tag).style.opacity = 0;
-      // the whole cruise turns at most ~20° (curve): a long gentle arc, never a loop
       const leg = DEMO ? 24 : m.t * 60, size = (v) => Object.assign({}, v, { orbitK: (v.orbitK || 2.32) * 1.125 });   // planet 20 % smaller against an orbit 10 % smaller on screen
       measure(); this.W = W; this.H = H;
       this.eng = HM.multiJourney($('canvas.jh-gl', voyEl), W, H, { glDpr: Math.min(2, window.devicePixelRatio || 2),   /* 3D at 2× density: ~44% of the pixels of 3× on iPhone */ routeStyle: 'bundle', fixedView: true, shipScale: 0.021, vantFit: 1.325 / 0.9, reattachPx: 44,
-        cruise: Math.max(16, Math.min(700, 0.6 * leg)), curve: Math.min(0.02, 0.35 / Math.max(16, Math.min(700, 0.6 * leg))),
+        legSpeed: DEMO ? 0 : 1.2,   /* constant ship speed for any timer length: a straight cruise that folds on itself unseen */
         planetsData: { list: [size(m.o.v), size(m.d.v)] }, legDur: leg,
         intro: { dur: 8.8 }, introSrc: () => streakCv, introGo: false, onIntroEnd: () => voyEl.classList.remove('introing'),
         onState: (v) => { this.st.on = v; this.sync(); this.render(); HMSound.adrift(!v); }, onPhase: (ph) => this.phase(ph), onFrame: (f) => this.frame(f) });
-      this.fire = HM.fireTimer($('canvas.jh-tm', voyEl), 390, 92, { size: 50, fps: 30 });   // slow-writhing filaments: 30 redraws a second are enough this.sync(); this.render();
+      this.fire = HM.fireTimer($('canvas.jh-tm', voyEl), 390, 92, { size: 50, fps: 30 });   // slow-writhing filaments: 30 redraws a second are enough
+      this.sync(); this.render();
     }
     go() { this.eng.set('introGo', true); }
     total() { return this.m.t * 60; }

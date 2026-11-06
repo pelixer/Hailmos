@@ -1,74 +1,82 @@
-/* Hailmos ambient: synthesised live, no audio files, no melody.
-   a humming low drone · a dark brown-noise bed · sparse music-box tines picked at random from a dark set (never stepwise)
-   reacts to the voyage: swells in on launch, muffles when the ship is pulled off, a low triad on landing, fades out at home */
+/* Hailmos ambient: synthesised live, no audio files, no melody, no events.
+   Built for focus: only steady-state sound (a changing, event-like sound pulls attention; a steady one fades from notice),
+   nothing below ~140 Hz (no rumble), nothing struck (no bells, no plucks).
+   · a far "solar wind": soft pink noise through a slowly drifting band, wide and decorrelated left/right
+   · a glass pad: an open fifth stack (A3 E4 B4 E5 B5, weighted to the middle, no third: neither bright nor sad) of pure tones that breathe in and out
+     on long, unrelated cycles, like tape loops drifting out of phase, so it never repeats and never forms a line
+   · a long dark hall reverb that turns both into one distant space
+   reacts to the voyage: fades in on launch, muffles when the ship is pulled off, opens a touch on landing, fades out at home */
 'use strict';
 const HMSound = (() => {
   const KEY = 'hailmos.sound';
   let on = true; try { on = localStorage.getItem(KEY) !== 'off'; } catch (e) {}
-  let ac = null, out = null, mlp = null, droneLP = null, tineBus = null, revIn = null, playing = false, state = 'orbit', timer = 0, lastNote = -1, stopT = 0;
+  let ac = null, out = null, mlp = null, playing = false, state = 'orbit', stopT = 0;
   const now = () => ac.currentTime;
-  const mtof = (m) => 440 * Math.pow(2, (m - 69) / 12);
-  const DARK = [57, 60, 62, 65, 67, 69, 72, 74];   // A3 C4 D4 F4 G4 A4 C5 D5 — D minor pentatonic, kept low and mid
 
-  function noise(sec, brown) { const n = Math.floor(ac.sampleRate * sec), b = ac.createBuffer(2, n, ac.sampleRate);
-    for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); let last = 0; for (let i = 0; i < n; i++) { const w = Math.random() * 2 - 1; if (brown) { last = (last + 0.02 * w) / 1.02; d[i] = last * 3.5; } else d[i] = w; }
-      const f = Math.min(n >> 1, Math.floor(ac.sampleRate * 0.05)); for (let i = 0; i < f; i++) { const k = i / f; d[i] *= k; d[n - 1 - i] *= k; } }   // seamless loop ends
+  // pink noise (Kellet's filter), its two ends faded together so the loop has no seam
+  function pink(sec) { const n = Math.floor(ac.sampleRate * sec), b = ac.createBuffer(2, n, ac.sampleRate);
+    for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); let b0 = 0, b1 = 0, b2 = 0, b3 = 0, b4 = 0, b5 = 0, b6 = 0;
+      for (let i = 0; i < n; i++) { const w = Math.random() * 2 - 1;
+        b0 = 0.99886 * b0 + w * 0.0555179; b1 = 0.99332 * b1 + w * 0.0750759; b2 = 0.969 * b2 + w * 0.153852; b3 = 0.8665 * b3 + w * 0.3104856;
+        b4 = 0.55 * b4 + w * 0.5329522; b5 = -0.7616 * b5 - w * 0.016898; d[i] = (b0 + b1 + b2 + b3 + b4 + b5 + b6 + w * 0.5362) * 0.11; b6 = w * 0.115926; }
+      const f = Math.floor(ac.sampleRate * 0.08); for (let i = 0; i < f; i++) { const k = i / f; d[i] *= k; d[n - 1 - i] *= k; } }
     return b; }
   function impulse(sec) { const n = Math.floor(ac.sampleRate * sec), b = ac.createBuffer(2, n, ac.sampleRate);
-    for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 3.2); }
+    for (let c = 0; c < 2; c++) { const d = b.getChannelData(c); for (let i = 0; i < n; i++) d[i] = (Math.random() * 2 - 1) * Math.pow(1 - i / n, 2.6); }
     return b; }
+  // a very slow sine wobble on an AudioParam: centre ± depth, one cycle every `per` seconds
+  function drift(param, per, depth, phase) { const l = ac.createOscillator(); l.frequency.value = 1 / per; const g = ac.createGain(); g.gain.value = depth;
+    l.connect(g); g.connect(param); l.start(now() + (phase || 0) * per); return l; }
 
   function build() {
     out = ac.createGain(); out.gain.value = 0;
-    mlp = ac.createBiquadFilter(); mlp.type = 'lowpass'; mlp.frequency.value = 7000; mlp.Q.value = 0.5;   // master tone: closes when the ship is adrift
-    const comp = ac.createDynamicsCompressor(); comp.threshold.value = -18; comp.ratio.value = 3; comp.attack.value = 0.02; comp.release.value = 0.4;
-    out.connect(mlp); mlp.connect(comp); comp.connect(ac.destination);
-    // dark reverb
-    const rev = ac.createConvolver(); rev.buffer = impulse(5.5); const rlp = ac.createBiquadFilter(); rlp.type = 'lowpass'; rlp.frequency.value = 2200;
-    const rg = ac.createGain(); rg.gain.value = 0.55; revIn = ac.createGain(); revIn.connect(rev); rev.connect(rlp); rlp.connect(rg); rg.connect(out);
-    // humming drone: D2 saw pair (slow beating) + A2 triangle, through a breathing low-pass; a sine sub for headphones
-    droneLP = ac.createBiquadFilter(); droneLP.type = 'lowpass'; droneLP.frequency.value = 380; droneLP.Q.value = 1.2;
-    const dg = ac.createGain(); dg.gain.value = 0.2; droneLP.connect(dg); dg.connect(out); const ds = ac.createGain(); ds.gain.value = 0.08; dg.connect(ds); ds.connect(revIn);
-    // D3 layer: the hum stays audible on a phone speaker
-    [[73.42, 'sawtooth', 0.38], [73.42 * 1.0035, 'sawtooth', 0.34], [110.0, 'triangle', 0.35], [146.83, 'triangle', 0.9], [146.83 * 0.997, 'sawtooth', 0.22]].forEach(([f, t, g]) => { const o = ac.createOscillator(); o.type = t; o.frequency.value = f; const gg = ac.createGain(); gg.gain.value = g; o.connect(gg); gg.connect(droneLP); o.start(); });
-    const sub = ac.createOscillator(); sub.frequency.value = 36.71; const sg = ac.createGain(); sg.gain.value = 0.09; sub.connect(sg); sg.connect(out); sub.start();
-    const lfo = ac.createOscillator(); lfo.frequency.value = 0.07; const lg = ac.createGain(); lg.gain.value = 170; lfo.connect(lg); lg.connect(droneLP.frequency); lfo.start();   // the "woom… woom"
-    const alfo = ac.createOscillator(); alfo.frequency.value = 0.11; const ag = ac.createGain(); ag.gain.value = 0.05; alfo.connect(ag); ag.connect(dg.gain); alfo.start();
-    // brown-noise bed: two loops of different length so it never audibly repeats
-    [7.3, 11.1].forEach((sec, i) => { const s = ac.createBufferSource(); s.buffer = noise(sec, true); s.loop = true; const lp = ac.createBiquadFilter(); lp.type = 'lowpass'; lp.frequency.value = i ? 520 : 760;
-      const g = ac.createGain(); g.gain.value = 0.045; s.connect(lp); lp.connect(g); g.connect(out); s.start(); });
-    // music-box tines bus: softened top, mostly into the reverb
-    tineBus = ac.createGain(); const tlp = ac.createBiquadFilter(); tlp.type = 'lowpass'; tlp.frequency.value = 2600; const dry = ac.createGain(); dry.gain.value = 0.32; const wet = ac.createGain(); wet.gain.value = 0.85;
-    tineBus.connect(tlp); tlp.connect(dry); dry.connect(out); tlp.connect(wet); wet.connect(revIn);
+    // master tone: closes when the ship is adrift; a high-pass keeps every rumble out
+    mlp = ac.createBiquadFilter(); mlp.type = 'lowpass'; mlp.frequency.value = 6000; mlp.Q.value = 0.4;
+    const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 140; hp.Q.value = 0.5;
+    const comp = ac.createDynamicsCompressor(); comp.threshold.value = -24; comp.ratio.value = 2.5; comp.attack.value = 0.05; comp.release.value = 0.8;
+    out.connect(hp); hp.connect(mlp); mlp.connect(comp); comp.connect(ac.destination);
+    // long dark hall
+    const rev = ac.createConvolver(); rev.buffer = impulse(7); const rlp = ac.createBiquadFilter(); rlp.type = 'lowpass'; rlp.frequency.value = 3200;
+    const rg = ac.createGain(); rg.gain.value = 0.7; const revIn = ac.createGain(); revIn.connect(rev); rev.connect(rlp); rlp.connect(rg); rg.connect(out);
+
+    // solar wind: two pink loops of unrelated length, each through its own drifting band
+    [[9.7, 520, 0.6, 31, 0], [13.3, 1300, 0.9, 43, 0.5]].forEach(([sec, fc, q, per, ph], i) => {
+      const s = ac.createBufferSource(); s.buffer = pink(sec); s.loop = true;
+      const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = fc; bp.Q.value = q; drift(bp.frequency, per, fc * 0.35, ph);
+      const g = ac.createGain(); g.gain.value = i ? 0.09 : 0.14; drift(g.gain, per * 1.37, i ? 0.025 : 0.04, ph + 0.25);
+      s.connect(bp); bp.connect(g); g.connect(out); const ws = ac.createGain(); ws.gain.value = 0.25; g.connect(ws); ws.connect(revIn); s.start(); });
+
+    // glass pad: pure tones, each a slightly detuned pair (slow, gentle chorus), breathing on its own long cycle
+    const pad = ac.createGain(); pad.gain.value = 1; const plp = ac.createBiquadFilter(); plp.type = 'lowpass'; plp.frequency.value = 1800; plp.Q.value = 0.3;
+    pad.connect(plp); const dry = ac.createGain(); dry.gain.value = 0.35; const wet = ac.createGain(); wet.gain.value = 0.9; plp.connect(dry); dry.connect(out); plp.connect(wet); wet.connect(revIn);
+    [[220.0, 0.014, 37, 0.0], [329.63, 0.03, 29, 0.35], [493.88, 0.026, 47, 0.6], [659.26, 0.016, 53, 0.15], [987.77, 0.006, 61, 0.8]].forEach(([f, a, per, ph]) => {
+      const g = ac.createGain(); g.gain.value = a * 0.55; drift(g.gain, per, a * 0.45, ph);
+      [[f, -0.25], [f * 1.0018, 0.25]].forEach(([fr, pan]) => { const o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = fr;
+        const p = ac.createStereoPanner ? ac.createStereoPanner() : null; if (p) { p.pan.value = pan; o.connect(p); p.connect(g); } else o.connect(g); o.start(); });
+      g.connect(pad); });
   }
 
-  // one comb tine: fundamental + two inharmonic partials, instant attack, long dark decay
-  function tine(m, vel, at) { const t = at || now(), f = mtof(m);
-    [[1, 1, 2.8], [2.76, 0.22, 0.9], [5.4, 0.06, 0.35]].forEach(([r, a, dec]) => { const o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = f * r; const g = ac.createGain();
-      g.gain.setValueAtTime(0, t); g.gain.linearRampToValueAtTime(vel * a * 0.18, t + 0.004); g.gain.exponentialRampToValueAtTime(0.0001, t + dec); o.connect(g); g.connect(tineBus); o.start(t); o.stop(t + dec + 0.05); }); }
-  // random, never stepwise: skip the last note and its neighbours, so no line forms
-  function pick() { let i, tries = 0; do { i = Math.floor(Math.random() * DARK.length); tries++; } while (tries < 20 && lastNote >= 0 && Math.abs(i - lastNote) <= 1); lastNote = i; return DARK[i]; }
-  function loop() { clearTimeout(timer); if (!playing) return;
-    if (state !== 'adrift') { const m = pick(), v = 0.45 + 0.45 * Math.random(); tine(m, v); if (Math.random() < 0.18) tine(m - 12, v * 0.5, now() + 0.02); }
-    const gap = state === 'leg' ? 2.4 + Math.random() * 3.4 : 4 + Math.random() * 5; timer = setTimeout(loop, gap * 1000); }
-
-  function level() { return on ? 0.85 : 0; }
+  function level() { return on ? 1.3 : 0; }
+  function to(param, v, sec) { const t = now(); param.cancelScheduledValues(t); param.setValueAtTime(param.value, t); param.linearRampToValueAtTime(v, t + sec); }
   return {
     // call inside a user gesture (the launch tap): iOS only lets audio start from one
     start() { const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
-      try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}   // play even with the silent switch on
+      // play even with the silent switch on
+      try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
       if (!ac) { ac = new C(); build(); } clearTimeout(stopT); ac.resume(); playing = true; state = 'orbit';
-      const t = now(); out.gain.cancelScheduledValues(t); out.gain.setValueAtTime(out.gain.value, t); out.gain.linearRampToValueAtTime(level(), t + 6);   // swells in with the opening
-      mlp.frequency.cancelScheduledValues(t); mlp.frequency.setValueAtTime(7000, t); clearTimeout(timer); timer = setTimeout(loop, 3500); },
+      // a slow fade in with the opening
+      to(out.gain, level(), 8); to(mlp.frequency, 6000, 0.1); },
     phase(kind) { if (playing && state !== 'adrift') state = kind === 'leg' ? 'leg' : 'orbit'; },
     adrift(a) { if (!playing || !ac) return; state = a ? 'adrift' : 'leg'; const t = now();
-      mlp.frequency.cancelScheduledValues(t); mlp.frequency.setValueAtTime(mlp.frequency.value, t); mlp.frequency.exponentialRampToValueAtTime(a ? 380 : 7000, t + (a ? 1.2 : 1.8));
-      out.gain.cancelScheduledValues(t); out.gain.setValueAtTime(out.gain.value, t); out.gain.linearRampToValueAtTime(a ? level() * 0.6 : level(), t + 1.4); },
-    land() { if (!playing || !ac) return; state = 'orbit'; const t = now() + 0.1; [50, 57, 62].forEach((m, i) => tine(m, 0.8 - i * 0.12, t + i * 0.16)); },
-    stop() { if (!ac || !playing) return; playing = false; clearTimeout(timer); const t = now(); out.gain.cancelScheduledValues(t); out.gain.setValueAtTime(out.gain.value, t); out.gain.linearRampToValueAtTime(0, t + 1.6);
-      stopT = setTimeout(() => { if (!playing) ac.suspend(); }, 1800); },
+      mlp.frequency.cancelScheduledValues(t); mlp.frequency.setValueAtTime(mlp.frequency.value, t); mlp.frequency.exponentialRampToValueAtTime(a ? 700 : 6000, t + (a ? 1.4 : 2.0));
+      to(out.gain, a ? level() * 0.6 : level(), 1.6); },
+    // landing: the space opens a little and settles back, nothing struck
+    land() { if (!playing || !ac) return; state = 'orbit'; const t = now();
+      mlp.frequency.cancelScheduledValues(t); mlp.frequency.setValueAtTime(mlp.frequency.value, t); mlp.frequency.linearRampToValueAtTime(9000, t + 2.5); mlp.frequency.linearRampToValueAtTime(6000, t + 9); },
+    stop() { if (!ac || !playing) return; playing = false; to(out.gain, 0, 2.2);
+      stopT = setTimeout(() => { if (!playing) ac.suspend(); }, 2500); },
     toggle() { on = !on; try { localStorage.setItem(KEY, on ? 'on' : 'off'); } catch (e) {}
-      if (ac && playing) { const t = now(); out.gain.cancelScheduledValues(t); out.gain.setValueAtTime(out.gain.value, t); out.gain.linearRampToValueAtTime(state === 'adrift' ? level() * 0.6 : level(), t + 0.8); }
+      if (ac && playing) to(out.gain, state === 'adrift' ? level() * 0.6 : level(), 0.8);
       return on; },
     get on() { return on; },
   };

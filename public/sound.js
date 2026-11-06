@@ -33,37 +33,39 @@ const HMSound = (() => {
     // master tone: closes when the ship is adrift; a high-pass keeps every rumble out
     mlp = ac.createBiquadFilter(); mlp.type = 'lowpass'; mlp.frequency.value = 6000; mlp.Q.value = 0.4;
     const hp = ac.createBiquadFilter(); hp.type = 'highpass'; hp.frequency.value = 140; hp.Q.value = 0.5;
-    const comp = ac.createDynamicsCompressor(); comp.threshold.value = -24; comp.ratio.value = 2.5; comp.attack.value = 0.05; comp.release.value = 0.8;
+    const comp = ac.createDynamicsCompressor(); comp.threshold.value = -20; comp.ratio.value = 3; comp.attack.value = 0.05; comp.release.value = 0.8;
     out.connect(hp); hp.connect(mlp); mlp.connect(comp); comp.connect(ac.destination);
     // long dark hall
     const rev = ac.createConvolver(); rev.buffer = impulse(7); const rlp = ac.createBiquadFilter(); rlp.type = 'lowpass'; rlp.frequency.value = 3200;
     const rg = ac.createGain(); rg.gain.value = 0.7; const revIn = ac.createGain(); revIn.connect(rev); rev.connect(rlp); rlp.connect(rg); rg.connect(out);
 
     // solar wind: two pink loops of unrelated length, each through its own drifting band
-    [[9.7, 520, 0.6, 31, 0], [13.3, 1300, 0.9, 43, 0.5]].forEach(([sec, fc, q, per, ph], i) => {
+    [[9.7, 520, 0.6, 31, 0], [13.3, 1300, 0.9, 43, 0.5], [11.9, 2600, 1.1, 37, 0.8]].forEach(([sec, fc, q, per, ph], i) => {
       const s = ac.createBufferSource(); s.buffer = pink(sec); s.loop = true;
       const bp = ac.createBiquadFilter(); bp.type = 'bandpass'; bp.frequency.value = fc; bp.Q.value = q; drift(bp.frequency, per, fc * 0.35, ph);
-      const g = ac.createGain(); g.gain.value = i ? 0.09 : 0.14; drift(g.gain, per * 1.37, i ? 0.025 : 0.04, ph + 0.25);
+      const g = ac.createGain(); g.gain.value = [0.14, 0.13, 0.07][i]; drift(g.gain, per * 1.37, [0.04, 0.035, 0.02][i], ph + 0.25);
       s.connect(bp); bp.connect(g); g.connect(out); const ws = ac.createGain(); ws.gain.value = 0.25; g.connect(ws); ws.connect(revIn); s.start(); });
 
     // glass pad: pure tones, each a slightly detuned pair (slow, gentle chorus), breathing on its own long cycle
-    const pad = ac.createGain(); pad.gain.value = 1; const plp = ac.createBiquadFilter(); plp.type = 'lowpass'; plp.frequency.value = 1800; plp.Q.value = 0.3;
+    const glass = ac.createPeriodicWave(new Float32Array([0, 0, 0, 0, 0]), new Float32Array([0, 1, 0.32, 0.14, 0.05]));
+    const pad = ac.createGain(); pad.gain.value = 1; const plp = ac.createBiquadFilter(); plp.type = 'lowpass'; plp.frequency.value = 3200; plp.Q.value = 0.3;
     pad.connect(plp); const dry = ac.createGain(); dry.gain.value = 0.35; const wet = ac.createGain(); wet.gain.value = 0.9; plp.connect(dry); dry.connect(out); plp.connect(wet); wet.connect(revIn);
     [[220.0, 0.014, 37, 0.0], [329.63, 0.03, 29, 0.35], [493.88, 0.026, 47, 0.6], [659.26, 0.016, 53, 0.15], [987.77, 0.006, 61, 0.8]].forEach(([f, a, per, ph]) => {
       const g = ac.createGain(); g.gain.value = a * 0.55; drift(g.gain, per, a * 0.45, ph);
-      [[f, -0.25], [f * 1.0018, 0.25]].forEach(([fr, pan]) => { const o = ac.createOscillator(); o.type = 'sine'; o.frequency.value = fr;
+      [[f, -0.25], [f * 1.0018, 0.25]].forEach(([fr, pan]) => { const o = ac.createOscillator(); o.setPeriodicWave(glass); o.frequency.value = fr;
         const p = ac.createStereoPanner ? ac.createStereoPanner() : null; if (p) { p.pan.value = pan; o.connect(p); p.connect(g); } else o.connect(g); o.start(); });
       g.connect(pad); });
   }
 
-  function level() { return on ? 1.3 : 0; }
+  function level() { return on ? 2.6 : 0; }
   function to(param, v, sec) { const t = now(); param.cancelScheduledValues(t); param.setValueAtTime(param.value, t); param.linearRampToValueAtTime(v, t + sec); }
   return {
     // call inside a user gesture (the launch tap): iOS only lets audio start from one
     start() { const C = window.AudioContext || window.webkitAudioContext; if (!C) return;
       // play even with the silent switch on
       try { if (navigator.audioSession) navigator.audioSession.type = 'playback'; } catch (e) {}
-      if (!ac) { ac = new C(); build(); } clearTimeout(stopT); ac.resume(); playing = true; state = 'orbit';
+      if (!ac) { ac = new C(); const u = ac.createBufferSource(); u.buffer = ac.createBuffer(1, 1, ac.sampleRate); u.connect(ac.destination); u.start(0); ac.resume(); build(); }
+      clearTimeout(stopT); ac.resume(); playing = true; state = 'orbit';
       // a slow fade in with the opening
       to(out.gain, level(), 8); to(mlp.frequency, 6000, 0.1); },
     phase(kind) { if (playing && state !== 'adrift') state = kind === 'leg' ? 'leg' : 'orbit'; },
